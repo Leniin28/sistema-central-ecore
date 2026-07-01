@@ -87,7 +87,7 @@
         <section class="grid gap-6 xl:grid-cols-2">
             <div class="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
                 <div class="border-b border-neutral-200 px-5 py-4 dark:border-neutral-700">
-                    <h2 class="font-medium text-neutral-900 dark:text-neutral-100">Últimas órdenes de servicio</h2>
+                    <h2 class="font-medium text-neutral-900 dark:text-neutral-100">Últimas órdenesss de servicio</h2>
                 </div>
 
                 <div class="overflow-x-auto">
