@@ -7,7 +7,7 @@
             </div>
 
             <div class="flex gap-3">
-                @if (auth()->user()->isAdmin())
+                @if (auth()->user()->isAdmin() && ! $orden->finanzas_generadas && $orden->estado !== 'entregado')
                     <a href="{{ route('admin.ordenes-servicio.edit', $orden) }}" class="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
                         Editar
                     </a>
@@ -18,6 +18,17 @@
                 </a>
             </div>
         </section>
+
+        @if (session('error'))
+            <div class="border-l-4 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">{{ session('error') }}</div>
+        @endif
+
+        @if ($orden->finanzas_generadas)
+            <div class="border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                <p class="font-semibold">Orden cerrada financieramente</p>
+                <p class="mt-1">Los servicios, refacciones, costos y totales ya no pueden modificarse.</p>
+            </div>
+        @endif
 
         <section class="max-w-4xl rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
             <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Datos generales</h2>

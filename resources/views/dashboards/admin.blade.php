@@ -6,34 +6,10 @@
                 <p class="text-sm text-neutral-600 dark:text-neutral-400">Resumen general para administrar clientes, equipos, servicios, órdenes y finanzas del sistema.</p>
             </div>
 
-            <div class="flex flex-wrap gap-3">
-                <a href="{{ route('admin.clientes.index') }}" class="inline-flex w-fit items-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
-                    Gestionar clientes
-                </a>
-
-                <a href="{{ route('admin.equipos.index') }}" class="inline-flex w-fit items-center rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
-                    Gestionar equipos
-                </a>
-
-                <a href="{{ route('admin.categorias-servicio.index') }}" class="inline-flex w-fit items-center rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
-                    Gestionar categorías
-                </a>
-
-                <a href="{{ route('admin.servicios.index') }}" class="inline-flex w-fit items-center rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
-                    Gestionar servicios
-                </a>
-
-                <a href="{{ route('admin.ordenes-servicio.index') }}" class="inline-flex w-fit items-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
-                    Gestionar órdenes
-                </a>
-
-                <a href="{{ route('admin.ordenes-servicio.create') }}" class="inline-flex w-fit items-center rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
-                    Crear orden
-                </a>
-
-                <a href="{{ route('admin.movimientos-financieros.index') }}" class="inline-flex w-fit items-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
-                    Ver finanzas
-                </a>
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('admin.ordenes-servicio.index') }}" class="inline-flex w-fit items-center rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">Ver órdenes</a>
+                <a href="{{ route('admin.movimientos-financieros.index') }}" class="inline-flex w-fit items-center rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">Finanzas</a>
+                <a href="{{ route('admin.recepciones.create') }}" class="inline-flex w-fit items-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">Nueva recepción</a>
             </div>
         </section>
 
@@ -87,7 +63,7 @@
         <section class="grid gap-6 xl:grid-cols-2">
             <div class="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
                 <div class="border-b border-neutral-200 px-5 py-4 dark:border-neutral-700">
-                    <h2 class="font-medium text-neutral-900 dark:text-neutral-100">Últimas órdenesss de servicio</h2>
+                    <h2 class="font-medium text-neutral-900 dark:text-neutral-100">Últimas órdenes de servicio</h2>
                 </div>
 
                 <div class="overflow-x-auto">

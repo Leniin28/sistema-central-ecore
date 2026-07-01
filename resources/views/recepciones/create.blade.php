@@ -1,0 +1,263 @@
+<x-layouts::app :title="__('Nueva recepción')">
+    @php
+        $servicioRows = array_values(old('servicios', [[]]));
+        $refaccionRows = array_values(old('refacciones', [[]]));
+        while (count($servicioRows) < 5) { $servicioRows[] = []; }
+        while (count($refaccionRows) < 5) { $refaccionRows[] = []; }
+    @endphp
+
+    <div class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-1 pb-10">
+        <header class="flex flex-col gap-4 border-b border-neutral-200 pb-5 dark:border-neutral-700 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+                <p class="text-sm font-medium text-blue-700 dark:text-blue-300">Recepción operativa</p>
+                <h1 class="mt-1 text-2xl font-semibold text-neutral-950 dark:text-white">Nueva recepción</h1>
+                <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Registra cliente, equipo y orden en un solo flujo.</p>
+            </div>
+            <a href="{{ route($routePrefix.'.ordenes-servicio.index') }}" class="text-sm font-medium text-neutral-600 hover:text-neutral-950 dark:text-neutral-300 dark:hover:text-white">Volver a órdenes</a>
+        </header>
+
+        @if ($errors->any())
+            <div class="border-l-4 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200" role="alert">
+                <p class="font-semibold">Revisa los datos marcados antes de guardar.</p>
+                <p class="mt-1">{{ $errors->first() }}</p>
+            </div>
+        @endif
+
+        <form id="recepcion-form" method="POST" action="{{ route($routePrefix.'.recepciones.store') }}" data-logistics-commission="{{ auth()->user()->hasRole('socio_logistico') ? (float) (auth()->user()->partner?->comision_fija ?? 0) : 0 }}" class="grid gap-8 xl:grid-cols-[minmax(0,1fr)_19rem]">
+            @csrf
+
+            <div class="min-w-0 space-y-10">
+                <section aria-labelledby="cliente-heading">
+                    <div class="flex items-center gap-3 border-b border-neutral-200 pb-3 dark:border-neutral-700">
+                        <span class="flex size-7 items-center justify-center rounded-full bg-neutral-900 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900">1</span>
+                        <div>
+                            <h2 id="cliente-heading" class="font-semibold text-neutral-950 dark:text-white">Cliente</h2>
+                            <p class="text-sm text-neutral-500 dark:text-neutral-400">Selecciona un registro o captura uno nuevo.</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 inline-flex rounded-md border border-neutral-300 p-1 dark:border-neutral-700" data-mode-group="cliente">
+                        <label class="cursor-pointer rounded px-3 py-1.5 text-sm font-medium has-[:checked]:bg-neutral-900 has-[:checked]:text-white dark:has-[:checked]:bg-white dark:has-[:checked]:text-neutral-900">
+                            <input class="sr-only" type="radio" name="cliente_modo" value="existente" @checked(old('cliente_modo', 'existente') === 'existente')>
+                            Existente
+                        </label>
+                        <label class="cursor-pointer rounded px-3 py-1.5 text-sm font-medium has-[:checked]:bg-neutral-900 has-[:checked]:text-white dark:has-[:checked]:bg-white dark:has-[:checked]:text-neutral-900">
+                            <input class="sr-only" type="radio" name="cliente_modo" value="nuevo" @checked(old('cliente_modo') === 'nuevo')>
+                            Nuevo cliente
+                        </label>
+                    </div>
+
+                    <div class="mt-5" data-mode-panel="cliente-existente">
+                        <label for="cliente_id" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Cliente registrado</label>
+                        <select id="cliente_id" name="cliente_id" class="mt-1 block w-full rounded-md border-neutral-300 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+                            <option value="">Selecciona un cliente</option>
+                            @foreach ($clientes as $cliente)
+                                <option value="{{ $cliente->id }}" @selected((int) old('cliente_id') === $cliente->id)>{{ $cliente->nombre }} · {{ $cliente->telefono }}</option>
+                            @endforeach
+                        </select>
+                        @error('cliente_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div class="mt-5 grid gap-4 sm:grid-cols-2" data-mode-panel="cliente-nuevo">
+                        <div>
+                            <label for="cliente_nombre" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Nombre completo</label>
+                            <input id="cliente_nombre" name="cliente[nombre]" value="{{ old('cliente.nombre') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900">
+                            @error('cliente.nombre') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label for="cliente_telefono" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Teléfono</label>
+                            <input id="cliente_telefono" name="cliente[telefono]" value="{{ old('cliente.telefono') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900">
+                            @error('cliente.telefono') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label for="cliente_correo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Correo electrónico</label>
+                            <input id="cliente_correo" type="email" name="cliente[correo]" value="{{ old('cliente.correo') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900">
+                        </div>
+                        <div>
+                            <label for="cliente_tipo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tipo de cliente</label>
+                            <select id="cliente_tipo" name="cliente[tipo_cliente]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900">
+                                <option value="mantenimiento" @selected(old('cliente.tipo_cliente', 'mantenimiento') === 'mantenimiento')>Mantenimiento</option>
+                                <option value="marketing" @selected(old('cliente.tipo_cliente') === 'marketing')>Marketing</option>
+                                <option value="ambos" @selected(old('cliente.tipo_cliente') === 'ambos')>Ambos</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label for="cliente_notas" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Notas del cliente</label>
+                            <textarea id="cliente_notas" name="cliente[notas]" rows="2" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900">{{ old('cliente.notas') }}</textarea>
+                        </div>
+                    </div>
+                </section>
+
+                <section aria-labelledby="equipo-heading">
+                    <div class="flex items-center gap-3 border-b border-neutral-200 pb-3 dark:border-neutral-700">
+                        <span class="flex size-7 items-center justify-center rounded-full bg-neutral-900 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900">2</span>
+                        <div><h2 id="equipo-heading" class="font-semibold text-neutral-950 dark:text-white">Equipo</h2><p class="text-sm text-neutral-500 dark:text-neutral-400">Asocia un equipo del cliente o registra uno nuevo.</p></div>
+                    </div>
+
+                    <div class="mt-5 inline-flex rounded-md border border-neutral-300 p-1 dark:border-neutral-700" data-mode-group="equipo">
+                        <label class="cursor-pointer rounded px-3 py-1.5 text-sm font-medium has-[:checked]:bg-neutral-900 has-[:checked]:text-white dark:has-[:checked]:bg-white dark:has-[:checked]:text-neutral-900">
+                            <input class="sr-only" type="radio" name="equipo_modo" value="existente" @checked(old('equipo_modo', 'existente') === 'existente')> Existente
+                        </label>
+                        <label class="cursor-pointer rounded px-3 py-1.5 text-sm font-medium has-[:checked]:bg-neutral-900 has-[:checked]:text-white dark:has-[:checked]:bg-white dark:has-[:checked]:text-neutral-900">
+                            <input class="sr-only" type="radio" name="equipo_modo" value="nuevo" @checked(old('equipo_modo') === 'nuevo')> Nuevo equipo
+                        </label>
+                    </div>
+
+                    <div class="mt-5" data-mode-panel="equipo-existente">
+                        <label for="equipo_id" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Equipo registrado</label>
+                        <select id="equipo_id" name="equipo_id" class="mt-1 block w-full rounded-md border-neutral-300 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+                            <option value="">Selecciona primero un cliente</option>
+                            @foreach ($equipos as $equipo)
+                                <option value="{{ $equipo->id }}" data-cliente="{{ $equipo->cliente_id }}" @selected((int) old('equipo_id') === $equipo->id)>
+                                    {{ $equipo->tipo_equipo }} · {{ $equipo->marca }} {{ $equipo->modelo }}{{ $equipo->numero_serie ? ' · '.$equipo->numero_serie : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('equipo_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div class="mt-5 grid gap-4 sm:grid-cols-2" data-mode-panel="equipo-nuevo">
+                        <div><label for="equipo_tipo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tipo de equipo</label><input id="equipo_tipo" name="equipo[tipo_equipo]" value="{{ old('equipo.tipo_equipo') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"></div>
+                        <div><label for="equipo_marca" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Marca</label><input id="equipo_marca" name="equipo[marca]" value="{{ old('equipo.marca') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"></div>
+                        <div><label for="equipo_modelo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Modelo</label><input id="equipo_modelo" name="equipo[modelo]" value="{{ old('equipo.modelo') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"></div>
+                        <div><label for="equipo_serie" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Número de serie</label><input id="equipo_serie" name="equipo[numero_serie]" value="{{ old('equipo.numero_serie') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"></div>
+                        <div><label for="equipo_accesorios" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Accesorios recibidos</label><input id="equipo_accesorios" name="equipo[accesorios_recibidos]" value="{{ old('equipo.accesorios_recibidos') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"></div>
+                        <div><label for="equipo_password" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Contraseña del equipo <span class="font-normal text-neutral-500">(sensible)</span></label><input id="equipo_password" type="password" autocomplete="new-password" name="equipo[password_equipo]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"></div>
+                        <div class="sm:col-span-2"><label for="equipo_estado" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Estado físico y observaciones</label><textarea id="equipo_estado" name="equipo[estado_fisico_inicial]" rows="2" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900">{{ old('equipo.estado_fisico_inicial') }}</textarea></div>
+                    </div>
+                </section>
+
+                <section aria-labelledby="orden-heading">
+                    <div class="flex items-center gap-3 border-b border-neutral-200 pb-3 dark:border-neutral-700"><span class="flex size-7 items-center justify-center rounded-full bg-neutral-900 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900">3</span><div><h2 id="orden-heading" class="font-semibold text-neutral-950 dark:text-white">Orden de servicio</h2><p class="text-sm text-neutral-500 dark:text-neutral-400">La orden iniciará en estado Recibido.</p></div></div>
+                    <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                        <div><label for="tipo_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tipo de recepción</label><select id="tipo_recepcion" name="orden[tipo_recepcion]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><option value="sucursal">Sucursal</option><option value="domicilio" @selected(old('orden.tipo_recepcion') === 'domicilio')>Domicilio</option><option value="directo" @selected(old('orden.tipo_recepcion') === 'directo')>Directo</option></select></div>
+                        @if (auth()->user()->isAdmin())
+                            <div><label for="partner_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Partner logístico</label><select id="partner_recepcion" name="orden[partner_recepcion_id]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><option value="" data-commission="0">Sin partner</option>@foreach ($partnersRecepcion as $partner)<option value="{{ $partner->id }}" data-commission="{{ $partner->comision_fija }}" @selected((int) old('orden.partner_recepcion_id') === $partner->id)>{{ $partner->nombre }}</option>@endforeach</select></div>
+                        @else
+                            <div class="border-l-2 border-blue-500 pl-3 text-sm"><p class="text-neutral-500 dark:text-neutral-400">Partner logístico</p><p class="font-medium text-neutral-950 dark:text-white">{{ auth()->user()->partner?->nombre ?? 'Sin partner asignado' }}</p></div>
+                        @endif
+                        <div><label for="partner_tecnico" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Partner técnico</label><select id="partner_tecnico" name="orden[partner_tecnico_id]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><option value="">Por asignar</option>@foreach ($partnersTecnicos as $partner)<option value="{{ $partner->id }}" @selected((int) old('orden.partner_tecnico_id') === $partner->id)>{{ $partner->nombre }}</option>@endforeach</select></div>
+                        <div class="sm:col-span-2"><label for="problema_reportado" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Problema reportado</label><textarea id="problema_reportado" name="orden[problema_reportado]" rows="3" required class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" placeholder="Describe lo que reporta el cliente y el servicio solicitado.">{{ old('orden.problema_reportado') }}</textarea>@error('orden.problema_reportado') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror</div>
+                        <div class="sm:col-span-2"><label for="orden_notas" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Notas internas</label><textarea id="orden_notas" name="orden[notas]" rows="2" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900">{{ old('orden.notas') }}</textarea></div>
+                    </div>
+                </section>
+
+                <section aria-labelledby="servicios-heading">
+                    <div class="flex items-center justify-between border-b border-neutral-200 pb-3 dark:border-neutral-700"><div class="flex items-center gap-3"><span class="flex size-7 items-center justify-center rounded-full bg-neutral-900 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900">4</span><div><h2 id="servicios-heading" class="font-semibold text-neutral-950 dark:text-white">Servicios solicitados</h2><p class="text-sm text-neutral-500 dark:text-neutral-400">Elige al menos un servicio.</p></div></div></div>
+                    @error('servicios') <p class="mt-3 text-sm text-red-600">{{ $message }}</p> @enderror
+                    <div class="mt-4 divide-y divide-neutral-200 border-y border-neutral-200 dark:divide-neutral-700 dark:border-neutral-700">
+                        @foreach ($servicioRows as $index => $row)
+                            <div class="grid gap-3 py-4 md:grid-cols-[minmax(12rem,2fr)_6rem_8rem_minmax(10rem,1fr)]" data-service-row>
+                                <div><label class="block text-xs font-medium text-neutral-500">Servicio {{ $index + 1 }}</label><select name="servicios[{{ $index }}][servicio_id]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-service-select><option value="">Sin servicio</option>@foreach ($servicios as $servicio)<option value="{{ $servicio->id }}" data-price="{{ $servicio->precio_base }}" @selected((int) ($row['servicio_id'] ?? 0) === $servicio->id)>{{ $servicio->nombre }} · ${{ number_format($servicio->precio_base, 2) }}</option>@endforeach</select></div>
+                                <div><label class="block text-xs font-medium text-neutral-500">Cantidad</label><input type="number" min="1" name="servicios[{{ $index }}][cantidad]" value="{{ $row['cantidad'] ?? 1 }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-quantity></div>
+                                <div><label class="block text-xs font-medium text-neutral-500">Precio</label><input type="number" min="0" step="0.01" name="servicios[{{ $index }}][precio_unitario]" value="{{ $row['precio_unitario'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-service-price></div>
+                                <div><label class="block text-xs font-medium text-neutral-500">Notas</label><input name="servicios[{{ $index }}][notas]" value="{{ $row['notas'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"></div>
+                            </div>
+                        @endforeach
+                    </div>
+                </section>
+
+                <section aria-labelledby="refacciones-heading">
+                    <div class="flex items-center gap-3 border-b border-neutral-200 pb-3 dark:border-neutral-700"><span class="flex size-7 items-center justify-center rounded-full bg-neutral-900 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900">5</span><div><h2 id="refacciones-heading" class="font-semibold text-neutral-950 dark:text-white">Refacciones</h2><p class="text-sm text-neutral-500 dark:text-neutral-400">Opcional. Registra costo y precio al cliente.</p></div></div>
+                    <div class="mt-4 divide-y divide-neutral-200 border-y border-neutral-200 dark:divide-neutral-700 dark:border-neutral-700">
+                        @foreach ($refaccionRows as $index => $row)
+                            <div class="grid gap-3 py-4 md:grid-cols-[minmax(11rem,2fr)_5rem_8rem_8rem_minmax(9rem,1fr)]" data-part-row>
+                                <div><label class="block text-xs font-medium text-neutral-500">Descripción {{ $index + 1 }}</label><input name="refacciones[{{ $index }}][descripcion]" value="{{ $row['descripcion'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-part-description></div>
+                                <div><label class="block text-xs font-medium text-neutral-500">Cantidad</label><input type="number" min="1" name="refacciones[{{ $index }}][cantidad]" value="{{ $row['cantidad'] ?? 1 }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-quantity></div>
+                                <div><label class="block text-xs font-medium text-neutral-500">Costo</label><input type="number" min="0" step="0.01" name="refacciones[{{ $index }}][costo_unitario]" value="{{ $row['costo_unitario'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-part-cost></div>
+                                <div><label class="block text-xs font-medium text-neutral-500">Precio cliente</label><input type="number" min="0" step="0.01" name="refacciones[{{ $index }}][precio_unitario_cliente]" value="{{ $row['precio_unitario_cliente'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-part-price></div>
+                                <div><label class="block text-xs font-medium text-neutral-500">Notas</label><input name="refacciones[{{ $index }}][notas]" value="{{ $row['notas'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"></div>
+                            </div>
+                        @endforeach
+                    </div>
+                </section>
+            </div>
+
+            <aside class="xl:sticky xl:top-6 xl:self-start" aria-label="Resumen de recepción">
+                <div class="border-t-4 border-neutral-900 bg-neutral-50 p-5 dark:border-white dark:bg-neutral-900">
+                    <h2 class="font-semibold text-neutral-950 dark:text-white">Resumen estimado</h2>
+                    <dl class="mt-5 space-y-3 text-sm">
+                        <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Servicios</dt><dd id="summary-services" class="font-medium">$0.00</dd></div>
+                        <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Refacciones</dt><dd id="summary-parts" class="font-medium">$0.00</dd></div>
+                        <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Costo refacciones</dt><dd id="summary-parts-cost" class="font-medium text-red-700 dark:text-red-300">$0.00</dd></div>
+                        <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Comisión logística</dt><dd id="summary-commission" class="font-medium text-red-700 dark:text-red-300">$0.00</dd></div>
+                        <div class="flex justify-between gap-4 border-t border-neutral-300 pt-3 dark:border-neutral-700"><dt class="font-semibold">Total al cliente</dt><dd id="summary-total" class="text-lg font-semibold">$0.00</dd></div>
+                        <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Utilidad estimada</dt><dd id="summary-profit" class="font-semibold text-emerald-700 dark:text-emerald-300">$0.00</dd></div>
+                    </dl>
+                    <p class="mt-4 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Estimación previa. Las finanzas oficiales se generan cuando la orden se entrega.</p>
+                    <button type="submit" class="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-500 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200">Guardar recepción</button>
+                </div>
+            </aside>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('recepcion-form');
+            const money = value => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value || 0);
+
+            const syncModes = () => {
+                ['cliente', 'equipo'].forEach(group => {
+                    const value = form.querySelector(`input[name="${group}_modo"]:checked`)?.value;
+                    form.querySelectorAll(`[data-mode-panel^="${group}-"]`).forEach(panel => {
+                        panel.hidden = !panel.matches(`[data-mode-panel="${group}-${value}"]`);
+                        panel.querySelectorAll('input, select, textarea').forEach(field => field.disabled = panel.hidden);
+                    });
+                });
+                if (form.querySelector('input[name="cliente_modo"]:checked')?.value === 'nuevo') {
+                    const newEquipment = form.querySelector('input[name="equipo_modo"][value="nuevo"]');
+                    if (newEquipment && !newEquipment.checked) { newEquipment.checked = true; syncModes(); }
+                }
+            };
+
+            const filterEquipment = () => {
+                const clientId = document.getElementById('cliente_id')?.value;
+                const select = document.getElementById('equipo_id');
+                if (!select) return;
+                [...select.options].forEach((option, index) => {
+                    if (index === 0) return;
+                    option.hidden = !clientId || option.dataset.cliente !== clientId;
+                    option.disabled = option.hidden;
+                });
+                if (select.selectedOptions[0]?.disabled) select.value = '';
+            };
+
+            const calculate = () => {
+                let services = 0, parts = 0, costs = 0;
+                form.querySelectorAll('[data-service-row]').forEach(row => {
+                    if (!row.querySelector('[data-service-select]').value) return;
+                    services += (Number(row.querySelector('[data-quantity]').value) || 0) * (Number(row.querySelector('[data-service-price]').value) || 0);
+                });
+                form.querySelectorAll('[data-part-row]').forEach(row => {
+                    if (!row.querySelector('[data-part-description]').value.trim()) return;
+                    const quantity = Number(row.querySelector('[data-quantity]').value) || 0;
+                    costs += quantity * (Number(row.querySelector('[data-part-cost]').value) || 0);
+                    parts += quantity * (Number(row.querySelector('[data-part-price]').value) || 0);
+                });
+                const partnerSelect = document.getElementById('partner_recepcion');
+                const commission = partnerSelect
+                    ? Number(partnerSelect.selectedOptions[0]?.dataset.commission || 0)
+                    : Number(form.dataset.logisticsCommission || 0);
+                document.getElementById('summary-services').textContent = money(services);
+                document.getElementById('summary-parts').textContent = money(parts);
+                document.getElementById('summary-parts-cost').textContent = money(costs);
+                document.getElementById('summary-commission').textContent = money(commission);
+                document.getElementById('summary-total').textContent = money(services + parts);
+                document.getElementById('summary-profit').textContent = money(services + parts - costs - commission);
+            };
+
+            form.addEventListener('change', event => {
+                if (event.target.matches('input[name$="_modo"]')) syncModes();
+                if (event.target.id === 'cliente_id') filterEquipment();
+                if (event.target.matches('[data-service-select]')) {
+                    const row = event.target.closest('[data-service-row]');
+                    const price = row.querySelector('[data-service-price]');
+                    if (event.target.value && !price.value) price.value = event.target.selectedOptions[0].dataset.price || '';
+                }
+                calculate();
+            });
+            form.addEventListener('input', calculate);
+            syncModes(); filterEquipment(); calculate();
+        });
+    </script>
+</x-layouts::app>

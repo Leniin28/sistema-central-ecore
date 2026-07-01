@@ -29,7 +29,7 @@ class ClienteController extends Controller
     public function create(): View
     {
         return view('clientes.create', [
-            'cliente' => new Cliente(),
+            'cliente' => new Cliente,
             'routePrefix' => $this->routePrefix(),
         ]);
     }

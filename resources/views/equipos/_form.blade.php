@@ -84,14 +84,17 @@
     </div>
 
     <div>
-        <label for="password_equipo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Password del equipo</label>
+        <label for="password_equipo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Contraseña del equipo</label>
         <input
             id="password_equipo"
             name="password_equipo"
-            type="text"
-            value="{{ old('password_equipo', $equipo->password_equipo) }}"
+            type="password"
+            autocomplete="new-password"
             class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
         >
+        @if ($equipo->exists)
+            <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Déjalo vacío para conservar la contraseña actual.</p>
+        @endif
         @error('password_equipo')
             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
         @enderror

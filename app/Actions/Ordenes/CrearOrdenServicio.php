@@ -1,0 +1,131 @@
+<?php
+
+namespace App\Actions\Ordenes;
+
+use App\Models\Equipo;
+use App\Models\OrdenServicio;
+use App\Models\Partner;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+class CrearOrdenServicio
+{
+    public function __construct(private CalcularTotalesOrdenServicio $calculadora) {}
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<int, array<string, mixed>>  $detalles
+     * @param  array<int, array<string, mixed>>  $refacciones
+     */
+    public function ejecutar(array $data, array $detalles, array $refacciones, User $actor): OrdenServicio
+    {
+        return DB::transaction(function () use ($data, $detalles, $refacciones, $actor): OrdenServicio {
+            $data = $this->prepararAsignaciones($data, $actor);
+            $this->validarEquipo($data);
+
+            $orden = OrdenServicio::create([
+                ...$data,
+                'folio' => $this->generarFolio(),
+                'estado' => 'recibido',
+                'total_cliente' => 0,
+                'costo_tecnico' => $data['costo_tecnico'] ?? 0,
+                'comision_logistica' => 0,
+                'utilidad_neta' => 0,
+                'fecha_recepcion' => now(),
+                'fecha_entrega' => null,
+                'finanzas_generadas' => false,
+                'creado_por_user_id' => $actor->id,
+            ]);
+
+            $orden->historialEstados()->create([
+                'user_id' => $actor->id,
+                'estado_anterior' => null,
+                'estado_nuevo' => 'recibido',
+                'comentario' => 'Orden creada',
+            ]);
+
+            foreach ($detalles as $detalle) {
+                $orden->detalles()->create($this->calculadora->detalle($detalle));
+            }
+
+            foreach ($refacciones as $refaccion) {
+                $orden->refacciones()->create($this->calculadora->refaccion($refaccion));
+            }
+
+            $resumen = $this->calculadora->resumen($detalles, $refacciones, (float) ($data['costo_tecnico'] ?? 0));
+            $orden->update(['total_cliente' => $resumen['total_cliente']]);
+
+            return $orden->fresh();
+        });
+    }
+
+    /** @param array<string, mixed> $data */
+    private function prepararAsignaciones(array $data, User $actor): array
+    {
+        if (! $actor->isAdmin() && ! $actor->hasRole('socio_logistico')) {
+            abort(403);
+        }
+
+        if ($actor->hasRole('socio_logistico')) {
+            abort_if($actor->partner_id === null, 403);
+            $this->validarPartner($actor->partner_id, 'logistico', 'partner_recepcion_id');
+            $data['partner_recepcion_id'] = $actor->partner_id;
+        } elseif ($actor->isAdmin() && ! empty($data['partner_recepcion_id'])) {
+            $this->validarPartner((int) $data['partner_recepcion_id'], 'logistico', 'partner_recepcion_id');
+        }
+
+        if (! empty($data['partner_tecnico_id'])) {
+            $this->validarPartner((int) $data['partner_tecnico_id'], 'tecnico', 'partner_tecnico_id');
+        }
+
+        return $data;
+    }
+
+    private function validarPartner(int $partnerId, string $tipo, string $campo): void
+    {
+        $valido = Partner::query()
+            ->whereKey($partnerId)
+            ->where('tipo_socio', $tipo)
+            ->where('activo', true)
+            ->exists();
+
+        if (! $valido) {
+            throw ValidationException::withMessages([
+                $campo => 'El partner seleccionado no corresponde al tipo requerido o está inactivo.',
+            ]);
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validarEquipo(array $data): void
+    {
+        if (empty($data['equipo_id'])) {
+            return;
+        }
+
+        $valido = Equipo::query()
+            ->whereKey($data['equipo_id'])
+            ->where('cliente_id', $data['cliente_id'])
+            ->exists();
+
+        if (! $valido) {
+            throw ValidationException::withMessages([
+                'equipo_id' => 'El equipo seleccionado no pertenece al cliente seleccionado.',
+            ]);
+        }
+    }
+
+    private function generarFolio(): string
+    {
+        $fecha = now()->format('Ymd');
+        $ultimoFolio = OrdenServicio::query()
+            ->where('folio', 'like', "OS-{$fecha}-%")
+            ->lockForUpdate()
+            ->orderByDesc('folio')
+            ->value('folio');
+        $consecutivo = $ultimoFolio ? ((int) substr($ultimoFolio, -4)) + 1 : 1;
+
+        return 'OS-'.$fecha.'-'.str_pad((string) $consecutivo, 4, '0', STR_PAD_LEFT);
+    }
+}

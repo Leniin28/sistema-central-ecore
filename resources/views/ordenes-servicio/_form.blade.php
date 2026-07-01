@@ -1,5 +1,9 @@
 @csrf
 
+@error('orden')
+    <div class="border-l-4 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">{{ $message }}</div>
+@enderror
+
 @php
     $servicioRows = old('servicios');
 
@@ -210,7 +214,7 @@
                         >
                             <option value="">Selecciona un servicio</option>
                             @foreach ($servicios as $servicio)
-                                <option value="{{ $servicio->id }}" @selected((int) ($row['servicio_id'] ?? 0) === $servicio->id)>
+                                <option value="{{ $servicio->id }}" data-price="{{ $servicio->precio_base }}" @selected((int) ($row['servicio_id'] ?? 0) === $servicio->id)>
                                     {{ $servicio->nombre }} - ${{ number_format($servicio->precio_base, 2) }}
                                 </option>
                             @endforeach
@@ -374,6 +378,16 @@
     </section>
 </div>
 
+<section class="mt-6 border-y border-neutral-200 py-5 dark:border-neutral-700" aria-label="Resumen estimado">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div><p class="text-xs font-medium uppercase text-neutral-500">Servicios</p><p id="order-total-services" class="mt-1 text-lg font-semibold">$0.00</p></div>
+        <div><p class="text-xs font-medium uppercase text-neutral-500">Refacciones</p><p id="order-total-parts" class="mt-1 text-lg font-semibold">$0.00</p></div>
+        <div><p class="text-xs font-medium uppercase text-neutral-500">Costo refacciones</p><p id="order-cost-parts" class="mt-1 text-lg font-semibold text-red-700 dark:text-red-300">$0.00</p></div>
+        <div><p class="text-xs font-medium uppercase text-neutral-500">Total al cliente</p><p id="order-total" class="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-300">$0.00</p></div>
+    </div>
+    <p class="mt-3 text-xs text-neutral-500 dark:text-neutral-400">Vista previa. Los importes se recalculan en el servidor al guardar.</p>
+</section>
+
 <div class="mt-6 flex items-center gap-3">
     <button type="submit" class="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
         Guardar orden
@@ -383,3 +397,43 @@
         Volver al listado
     </a>
 </div>
+
+<script>
+    const orderForm = document.currentScript.closest('form');
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = orderForm;
+        if (!form) return;
+        const money = value => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value || 0);
+        const calculate = () => {
+            let services = 0, parts = 0, costs = 0;
+            form.querySelectorAll('select[name^="servicios"][name$="[servicio_id]"]').forEach(select => {
+                if (!select.value) return;
+                const index = select.name.match(/\[(\d+)\]/)[1];
+                const quantity = Number(form.querySelector(`[name="servicios[${index}][cantidad]"]`)?.value) || 0;
+                const price = Number(form.querySelector(`[name="servicios[${index}][precio_unitario]"]`)?.value) || 0;
+                services += quantity * price;
+            });
+            form.querySelectorAll('input[name^="refacciones"][name$="[descripcion]"]').forEach(input => {
+                if (!input.value.trim()) return;
+                const index = input.name.match(/\[(\d+)\]/)[1];
+                const quantity = Number(form.querySelector(`[name="refacciones[${index}][cantidad]"]`)?.value) || 0;
+                costs += quantity * (Number(form.querySelector(`[name="refacciones[${index}][costo_unitario]"]`)?.value) || 0);
+                parts += quantity * (Number(form.querySelector(`[name="refacciones[${index}][precio_unitario_cliente]"]`)?.value) || 0);
+            });
+            document.getElementById('order-total-services').textContent = money(services);
+            document.getElementById('order-total-parts').textContent = money(parts);
+            document.getElementById('order-cost-parts').textContent = money(costs);
+            document.getElementById('order-total').textContent = money(services + parts);
+        };
+        form.addEventListener('change', event => {
+            if (event.target.matches('select[name^="servicios"][name$="[servicio_id]"]')) {
+                const index = event.target.name.match(/\[(\d+)\]/)[1];
+                const price = form.querySelector(`[name="servicios[${index}][precio_unitario]"]`);
+                if (event.target.value && !price.value) price.value = event.target.selectedOptions[0].dataset.price || '';
+            }
+            calculate();
+        });
+        form.addEventListener('input', calculate);
+        calculate();
+    });
+</script>

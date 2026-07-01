@@ -11,11 +11,45 @@
             </flux:sidebar.header>
 
             <flux:sidebar.nav>
-                <flux:sidebar.group class="grid">
-                    <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                <flux:sidebar.group heading="Operación" class="grid">
+                    <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard') || request()->routeIs('*.dashboard')" wire:navigate>
                         {{ __('Panel') }}
                     </flux:sidebar.item>
+
+                    @if (auth()->user()->isAdmin() || auth()->user()->hasRole('socio_logistico'))
+                        @php($prefix = auth()->user()->isAdmin() ? 'admin' : 'logistica')
+                        <flux:sidebar.item icon="plus-circle" :href="route($prefix.'.recepciones.create')" :current="request()->routeIs($prefix.'.recepciones.*')">
+                            Nueva recepción
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="clipboard-document-list" :href="route($prefix.'.ordenes-servicio.index')" :current="request()->routeIs($prefix.'.ordenes-servicio.*')">
+                            Órdenes
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="users" :href="route($prefix.'.clientes.index')" :current="request()->routeIs($prefix.'.clientes.*')">
+                            Clientes
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="computer-desktop" :href="route($prefix.'.equipos.index')" :current="request()->routeIs($prefix.'.equipos.*')">
+                            Equipos
+                        </flux:sidebar.item>
+                    @else
+                        <flux:sidebar.item icon="clipboard-document-list" :href="route('tecnico.ordenes-servicio.index')" :current="request()->routeIs('tecnico.ordenes-servicio.*')">
+                            Órdenes asignadas
+                        </flux:sidebar.item>
+                    @endif
                 </flux:sidebar.group>
+
+                @if (auth()->user()->isAdmin())
+                    <flux:sidebar.group heading="Administración" class="grid">
+                        <flux:sidebar.item icon="wrench-screwdriver" :href="route('admin.servicios.index')" :current="request()->routeIs('admin.servicios.*')">
+                            Servicios
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="tag" :href="route('admin.categorias-servicio.index')" :current="request()->routeIs('admin.categorias-servicio.*')">
+                            Categorías
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="banknotes" :href="route('admin.movimientos-financieros.index')" :current="request()->routeIs('admin.movimientos-financieros.*')">
+                            Finanzas
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endif
             </flux:sidebar.nav>
 
             <flux:spacer />

@@ -28,7 +28,7 @@ class CategoriaServicioController extends Controller
     public function create(): View
     {
         return view('categorias-servicio.create', [
-            'categoria' => new CategoriaServicio(),
+            'categoria' => new CategoriaServicio,
         ]);
     }
 

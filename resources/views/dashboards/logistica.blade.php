@@ -6,30 +6,9 @@
                 <p class="text-sm text-neutral-600 dark:text-neutral-400">Espacio para registrar clientes, equipos y órdenes recibidas en la sucursal.</p>
             </div>
 
-            <div class="flex flex-wrap gap-3">
-                <a href="{{ route('logistica.clientes.index') }}" class="inline-flex w-fit items-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
-                    Gestionar clientes
-                </a>
-
-                <a href="{{ route('logistica.clientes.create') }}" class="inline-flex w-fit items-center rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
-                    Registrar cliente
-                </a>
-
-                <a href="{{ route('logistica.equipos.index') }}" class="inline-flex w-fit items-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
-                    Gestionar equipos
-                </a>
-
-                <a href="{{ route('logistica.equipos.create') }}" class="inline-flex w-fit items-center rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
-                    Registrar equipo
-                </a>
-
-                <a href="{{ route('logistica.ordenes-servicio.index') }}" class="inline-flex w-fit items-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
-                    Gestionar órdenes
-                </a>
-
-                <a href="{{ route('logistica.ordenes-servicio.create') }}" class="inline-flex w-fit items-center rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
-                    Crear orden
-                </a>
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('logistica.ordenes-servicio.index') }}" class="inline-flex w-fit items-center rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">Ver órdenes</a>
+                <a href="{{ route('logistica.recepciones.create') }}" class="inline-flex w-fit items-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">Nueva recepción</a>
             </div>
         </section>
 

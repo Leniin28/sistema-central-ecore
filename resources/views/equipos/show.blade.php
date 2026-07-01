@@ -44,8 +44,8 @@
                 </div>
 
                 <div>
-                    <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Password del equipo</dt>
-                    <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">{{ $equipo->password_equipo ?? 'Sin password' }}</dd>
+                    <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Contraseña del equipo</dt>
+                    <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">{{ filled($equipo->password_equipo) ? 'Registrada' : 'No registrada' }}</dd>
                 </div>
 
                 <div>

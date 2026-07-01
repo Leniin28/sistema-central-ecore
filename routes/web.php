@@ -1,15 +1,16 @@
 <?php
 
-use App\Http\Controllers\DashboardRedirectController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\CategoriaServicioController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\DashboardRedirectController;
 use App\Http\Controllers\EquipoController;
+use App\Http\Controllers\LogisticaDashboardController;
 use App\Http\Controllers\MovimientoFinancieroController;
 use App\Http\Controllers\OrdenServicioController;
 use App\Http\Controllers\OrdenServicioEstadoController;
+use App\Http\Controllers\RecepcionController;
 use App\Http\Controllers\ServicioController;
-use App\Http\Controllers\LogisticaDashboardController;
 use App\Http\Controllers\TecnicoDashboardController;
 use Illuminate\Support\Facades\Route;
 
@@ -20,6 +21,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('dashboard', AdminDashboardController::class)->name('dashboard');
+        Route::get('recepciones/create', [RecepcionController::class, 'create'])->name('recepciones.create');
+        Route::post('recepciones', [RecepcionController::class, 'store'])->name('recepciones.store');
 
         Route::resource('clientes', ClienteController::class);
         Route::resource('equipos', EquipoController::class);
@@ -40,6 +43,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('role:socio_logistico')->prefix('logistica')->name('logistica.')->group(function () {
         Route::get('dashboard', LogisticaDashboardController::class)->name('dashboard');
+        Route::get('recepciones/create', [RecepcionController::class, 'create'])->name('recepciones.create');
+        Route::post('recepciones', [RecepcionController::class, 'store'])->name('recepciones.store');
 
         Route::resource('clientes', ClienteController::class)
             ->only(['index', 'create', 'store', 'show']);

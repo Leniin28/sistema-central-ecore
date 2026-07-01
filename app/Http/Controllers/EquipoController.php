@@ -30,7 +30,7 @@ class EquipoController extends Controller
     public function create(): View
     {
         return view('equipos.create', [
-            'equipo' => new Equipo(),
+            'equipo' => new Equipo,
             'clientes' => $this->clientesForForm(),
             'routePrefix' => $this->routePrefix(),
         ]);
@@ -82,7 +82,13 @@ class EquipoController extends Controller
     {
         abort_unless(auth()->user()->isAdmin(), 403);
 
-        $equipo->update($this->validatedData($request));
+        $data = $this->validatedData($request);
+
+        if (! filled($data['password_equipo'] ?? null)) {
+            unset($data['password_equipo']);
+        }
+
+        $equipo->update($data);
 
         return redirect()
             ->route($this->routePrefix().'.equipos.index')

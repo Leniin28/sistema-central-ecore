@@ -1,0 +1,89 @@
+<?php
+
+namespace App\Actions\Ordenes;
+
+use App\Models\Equipo;
+use App\Models\OrdenServicio;
+use App\Models\Partner;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+class ActualizarOrdenServicio
+{
+    public function __construct(private CalcularTotalesOrdenServicio $calculadora) {}
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<int, array<string, mixed>>  $detalles
+     * @param  array<int, array<string, mixed>>  $refacciones
+     */
+    public function ejecutar(OrdenServicio $orden, array $data, array $detalles, array $refacciones, User $actor): OrdenServicio
+    {
+        abort_unless($actor->isAdmin(), 403);
+
+        return DB::transaction(function () use ($orden, $data, $detalles, $refacciones): OrdenServicio {
+            $orden = OrdenServicio::query()->lockForUpdate()->findOrFail($orden->id);
+
+            if ($orden->finanzas_generadas || $orden->estado === 'entregado') {
+                throw ValidationException::withMessages([
+                    'orden' => 'La orden entregada no puede modificarse porque sus finanzas ya están cerradas.',
+                ]);
+            }
+
+            $this->validarAsignaciones($data);
+            $orden->update($data);
+            $orden->detalles()->delete();
+            $orden->refacciones()->delete();
+
+            foreach ($detalles as $detalle) {
+                $orden->detalles()->create($this->calculadora->detalle($detalle));
+            }
+
+            foreach ($refacciones as $refaccion) {
+                $orden->refacciones()->create($this->calculadora->refaccion($refaccion));
+            }
+
+            $resumen = $this->calculadora->resumen($detalles, $refacciones, (float) ($data['costo_tecnico'] ?? 0));
+            $orden->update(['total_cliente' => $resumen['total_cliente']]);
+
+            return $orden->fresh();
+        });
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validarAsignaciones(array $data): void
+    {
+        if (! empty($data['equipo_id'])) {
+            $equipoValido = Equipo::query()
+                ->whereKey($data['equipo_id'])
+                ->where('cliente_id', $data['cliente_id'])
+                ->exists();
+
+            if (! $equipoValido) {
+                throw ValidationException::withMessages(['equipo_id' => 'El equipo no pertenece al cliente.']);
+            }
+        }
+
+        foreach ([
+            'partner_recepcion_id' => 'logistico',
+            'partner_tecnico_id' => 'tecnico',
+        ] as $campo => $tipo) {
+            if (empty($data[$campo])) {
+                continue;
+            }
+
+            $valido = Partner::query()
+                ->whereKey($data[$campo])
+                ->where('tipo_socio', $tipo)
+                ->where('activo', true)
+                ->exists();
+
+            if (! $valido) {
+                throw ValidationException::withMessages([
+                    $campo => 'El partner seleccionado no corresponde al tipo requerido o está inactivo.',
+                ]);
+            }
+        }
+    }
+}

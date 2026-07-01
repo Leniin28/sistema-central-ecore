@@ -28,22 +28,18 @@ class OrdenServicioEstadoController extends Controller
      */
     public function store(Request $request, OrdenServicio $ordenServicio): RedirectResponse
     {
-        $this->authorizeChange($ordenServicio);
-
         $data = $request->validate([
             'estado_nuevo' => ['required', Rule::in(self::ESTADOS)],
             'comentario' => ['nullable', 'string'],
         ]);
 
-        abort_if($ordenServicio->estado === 'entregado' && $ordenServicio->finanzas_generadas, 403);
-
-        abort_if($data['estado_nuevo'] === $ordenServicio->estado, 403);
-
-        $estadosPermitidos = $this->estadosDisponibles($ordenServicio);
-
-        abort_unless(in_array($data['estado_nuevo'], $estadosPermitidos, true), 403);
-
         DB::transaction(function () use ($ordenServicio, $data): void {
+            $ordenServicio = OrdenServicio::query()->lockForUpdate()->findOrFail($ordenServicio->id);
+            $this->authorizeChange($ordenServicio);
+            abort_if($ordenServicio->estado === 'entregado' || $ordenServicio->finanzas_generadas, 403);
+            abort_if($data['estado_nuevo'] === $ordenServicio->estado, 403);
+            abort_unless(in_array($data['estado_nuevo'], $this->estadosDisponibles($ordenServicio), true), 403);
+
             $estadoAnterior = $ordenServicio->estado;
 
             $ordenServicio->update([
@@ -99,7 +95,7 @@ class OrdenServicioEstadoController extends Controller
      */
     private function estadosDisponibles(OrdenServicio $orden): array
     {
-        if ($orden->estado === 'entregado' && $orden->finanzas_generadas) {
+        if ($orden->estado === 'entregado' || $orden->finanzas_generadas) {
             return [];
         }
 
