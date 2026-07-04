@@ -94,6 +94,48 @@
 
     <section class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
         <div class="space-y-1">
+            <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Recepción del equipo</h2>
+            <p class="text-sm text-neutral-600 dark:text-neutral-400">Indica dónde se recibió el equipo; aparecerá en la cotización.</p>
+        </div>
+
+        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+            <div>
+                <label for="tipo_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tipo de recepción</label>
+                <select
+                    id="tipo_recepcion"
+                    name="tipo_recepcion"
+                    class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                >
+                    @foreach (['en_negocio' => 'En negocio', 'recogido_a_domicilio' => 'Recogido a domicilio'] as $valor => $etiqueta)
+                        <option value="{{ $valor }}" @selected(old('tipo_recepcion', $cotizacion->tipo_recepcion ?? 'en_negocio') === $valor)>{{ $etiqueta }}</option>
+                    @endforeach
+                </select>
+                @error('tipo_recepcion')
+                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <div id="campo-direccion-recepcion">
+                <label for="direccion_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Dirección del cliente (recolección a domicilio)</label>
+                <input
+                    id="direccion_recepcion"
+                    name="direccion_recepcion"
+                    type="text"
+                    maxlength="500"
+                    value="{{ old('direccion_recepcion', $cotizacion->direccion_recepcion) }}"
+                    placeholder="Calle, número, colonia, ciudad"
+                    class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                >
+                <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Obligatoria solo si el equipo se recogió a domicilio.</p>
+                @error('direccion_recepcion')
+                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+        </div>
+    </section>
+
+    <section class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
+        <div class="space-y-1">
             <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Conceptos</h2>
             <p class="text-sm text-neutral-600 dark:text-neutral-400">Agrega al menos un concepto. Los importes se recalculan en el servidor al guardar.</p>
         </div>
@@ -267,5 +309,14 @@
         form.addEventListener('input', calculate);
         form.addEventListener('change', calculate);
         calculate();
+
+        const receptionType = form.querySelector('#tipo_recepcion');
+        const addressField = form.querySelector('#campo-direccion-recepcion');
+        const toggleAddress = () => {
+            if (!receptionType || !addressField) return;
+            addressField.style.display = receptionType.value === 'recogido_a_domicilio' ? '' : 'none';
+        };
+        receptionType?.addEventListener('change', toggleAddress);
+        toggleAddress();
     });
 </script>

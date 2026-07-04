@@ -43,9 +43,13 @@ servidor el endpoint responde `403`; con token ausente o incorrecto responde `40
 `POST /api/internal/quotes` acepta `cliente_id` **o** `cliente {nombre, telefono?,
 direccion?}` para alta rápida, `equipo_id` o `equipo {tipo_equipo, marca?, modelo?,
 numero_serie?}`, `items[]` (`tipo`, `descripcion`, `cantidad`, `precio_unitario`),
-`descuento`, `anticipo`, `notas`, `vigencia` y `external_id` (idempotencia: si se
+`descuento`, `anticipo`, `notas`, `vigencia`, `external_id` (idempotencia: si se
 repite el mismo `external_id` se devuelve la cotización ya creada, con la misma
-`internal_pdf_url`). No expone finanzas ni datos sensibles (nunca `password_equipo`).
+`internal_pdf_url`), y opcionalmente `tipo_recepcion`
+(`en_negocio` | `recogido_a_domicilio`) con `direccion_recepcion`. Si es recogida a
+domicilio y no se manda `direccion_recepcion`, se usa `cliente.direccion` como
+respaldo; si tampoco hay dirección, responde `422`. No expone finanzas ni datos
+sensibles (nunca `password_equipo`).
 
 Respuesta `201` (campos relevantes):
 
@@ -56,16 +60,21 @@ Respuesta `201` (campos relevantes):
   "external_id": "openclaw-msg-001",
   "total": 1000.0,
   "saldo": 800.0,
+  "tipo_recepcion": "recogido_a_domicilio",
+  "direccion_recepcion": "Av. Convención 500, Aguascalientes",
   "internal_pdf_url": "http://sistema-central-ecore.test/api/internal/quotes/12/pdf",
+  "internal_png_url": "http://sistema-central-ecore.test/api/internal/quotes/12/png",
   "pdf_download_endpoint": "/api/internal/quotes/12/pdf",
+  "png_download_endpoint": "/api/internal/quotes/12/png",
   "pdf_url": "http://.../admin/cotizaciones/12/pdf",
   "show_url": "http://.../admin/cotizaciones/12",
   "web_urls_require_session": true
 }
 ```
 
-- **`internal_pdf_url` / `pdf_download_endpoint`**: es la ruta que OpenClaw debe
-  usar para descargar el PDF con el Bearer Token, sin sesión web.
+- **`internal_pdf_url` / `internal_png_url`** (y sus variantes `*_download_endpoint`
+  relativas): rutas que OpenClaw debe usar para descargar PDF/PNG con el Bearer
+  Token, sin sesión web.
 - **`pdf_url` / `show_url`**: rutas del panel web; solo funcionan para usuarios
   autenticados con sesión (`web_urls_require_session: true`). No sirven para OpenClaw.
 
@@ -120,10 +129,35 @@ curl -H "Authorization: Bearer $TOKEN" \
 1. El usuario pide una cotización por Telegram; OpenClaw arma el JSON y llama a
    `POST /api/internal/quotes` con el Bearer Token (usando el `message_id` de
    Telegram como `external_id` para que reintentos no dupliquen).
-2. De la respuesta toma `internal_pdf_url` y descarga el PDF con el mismo token.
-3. Adjunta ese PDF al chat con `sendDocument` de la Bot API de Telegram.
-4. El envío como imagen (`sendPhoto`) queda para la fase posterior de PNG descrita
-   abajo; mientras tanto el PDF vía `sendDocument` cubre el caso de uso.
+2. De la respuesta toma `internal_pdf_url` o `internal_png_url` y descarga el
+   archivo con el mismo token.
+3. Adjunta el PNG al chat con `sendPhoto`, o el PDF con `sendDocument`.
+
+## Plantilla, logo y datos del negocio
+
+La plantilla (`resources/views/cotizaciones/_documento.blade.php`) es compartida
+por la vista imprimible, el PDF y el PNG. Muestra logo, nombre, teléfono, correo,
+folio, fecha, vigencia, estado, cliente, equipo, **ubicación de recepción**,
+conceptos, subtotal, descuento, total, anticipo, saldo, notas y leyenda.
+
+- **Logo**: `public/images/logo-ecore.png`, configurable con `NEGOCIO_LOGO`
+  (ruta relativa a `public/`). Se incrusta en base64 para que funcione igual en
+  navegador, dompdf y captura headless. Si el archivo no existe, se muestra el
+  nombre del negocio en texto.
+- **Datos del negocio**: `config/negocio.php` (`NEGOCIO_NOMBRE`, `NEGOCIO_ESLOGAN`,
+  `NEGOCIO_TELEFONO`, etc.). Defaults: E-Core / Mantenimiento de Software /
+  4494226522.
+
+## Recepción del equipo
+
+Cada cotización guarda un **snapshot** de dónde se recibió el equipo
+(`tipo_recepcion`: `en_negocio` | `recogido_a_domicilio`, y
+`direccion_recepcion`). Se guarda en la propia cotización —no se deriva del
+cliente— para que el documento conserve la dirección usada al emitirla aunque el
+cliente cambie después. Con `en_negocio` la plantilla muestra el nombre del
+`partner` (sucursal) si la cotización tiene uno; con `recogido_a_domicilio` la
+dirección es obligatoria (el formulario web la pide y la API responde `422` si
+falta).
 
 ## PDF
 
@@ -135,24 +169,25 @@ externos, funciona sin problema en Herd/Windows). Un único servicio
 - **API interna** (Bearer Token, sin sesión): `/api/internal/quotes/{id}/pdf`.
 - **Vista imprimible** en navegador: `/{admin|logistica}/cotizaciones/{id}/plantilla`.
 
-## Fase posterior: export a PNG (pendiente, NO implementada)
+## PNG (implementado)
 
-Objetivo futuro: enviar la cotización como imagen por Telegram (OpenClaw).
+`ExportarCotizacionPng` renderiza `resources/views/cotizaciones/png.blade.php`
+(misma plantilla `_documento`, lienzo de 800 px) y toma la captura con un
+**navegador headless ya instalado** — sin dependencias de Composer ni Node:
 
-- **Opción recomendada**: `spatie/browsershot` renderizando
-  `cotizaciones/plantilla` a PNG (misma vista, fidelidad total).
-- **Dependencias necesarias**: Node.js + Puppeteer (descarga un Chromium
-  headless, ~300 MB) o apuntar Browsershot a un Chrome/Edge ya instalado con
-  `->setChromePath()`.
-- **Riesgos en Windows/Herd**: rutas de node/npm no visibles para PHP-FPM de
-  Herd, bloqueos de antivirus/Defender al lanzar Chromium, procesos zombis, y
-  actualizaciones de Chrome que rompen Puppeteer. Por eso se pospuso.
-- **Alternativa sin Node**: Imagick + Ghostscript para rasterizar el PDF ya
-  existente (frágil en Windows: requiere extensión Imagick compilada para la
-  versión exacta de PHP de Herd).
-- **Integración con Telegram**: el flujo previsto es que OpenClaw llame a
-  `POST /api/internal/quotes`, reciba `id`/`folio`, y luego pida
-  `GET /api/internal/quotes/{id}/png` (endpoint futuro, mismo middleware
-  `internal.api`) para adjuntar la imagen con `sendPhoto`. Mientras tanto ya puede
-  descargar el PDF vía `GET /api/internal/quotes/{id}/pdf` con el Bearer Token
-  (sin sesión web) y adjuntarlo con `sendDocument`.
+1. Resuelve el navegador: `COTIZACIONES_BROWSER_BIN` del `.env` si está definido;
+   si no, Microsoft Edge en sus rutas estándar de Windows, luego Chrome, y por
+   último `google-chrome`/`chromium` en el PATH (para CI Linux).
+2. Escribe la vista a un HTML temporal en `storage/app/cotizaciones-png/` y ejecuta
+   `--headless=new --screenshot` a escala 2x (imagen nítida de 1600 px de ancho).
+3. Recorta el blanco sobrante inferior con GD (incluido en Herd) y borra los
+   temporales.
+
+Rutas (las tres devuelven `image/png` como descarga `cotizacion-FOLIO.png`):
+
+- **Panel web**: `/{admin|logistica}/cotizaciones/{id}/png` (botón "Descargar PNG"
+  en el detalle).
+- **API interna**: `GET /api/internal/quotes/{id}/png` con Bearer Token.
+
+Si no hay navegador disponible, el panel responde `503` con instrucciones y la API
+devuelve JSON `503`; define `COTIZACIONES_BROWSER_BIN` en el `.env` en ese caso.

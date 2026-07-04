@@ -13,6 +13,9 @@
                 <a href="{{ route($routePrefix.'.cotizaciones.pdf', $cotizacion) }}" class="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
                     Descargar PDF
                 </a>
+                <a href="{{ route($routePrefix.'.cotizaciones.png', $cotizacion) }}" class="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
+                    Descargar PNG
+                </a>
                 <a href="{{ route($routePrefix.'.cotizaciones.plantilla', $cotizacion) }}" target="_blank" class="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
                     Ver plantilla
                 </a>
@@ -93,6 +96,17 @@
                             <dt class="font-medium text-neutral-500 dark:text-neutral-400">Equipo</dt>
                             <dd class="mt-1 text-neutral-900 dark:text-neutral-100">
                                 {{ $cotizacion->equipo ? $cotizacion->equipo->tipo_equipo.' '.$cotizacion->equipo->marca.' '.$cotizacion->equipo->modelo : 'Sin equipo' }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="font-medium text-neutral-500 dark:text-neutral-400">Recepción del equipo</dt>
+                            <dd class="mt-1 text-neutral-900 dark:text-neutral-100">
+                                {{ $cotizacion->etiquetaRecepcion() }}
+                                @if ($cotizacion->esRecogidaADomicilio() && filled($cotizacion->direccion_recepcion))
+                                    <span class="block text-sm text-neutral-600 dark:text-neutral-400">{{ $cotizacion->direccion_recepcion }}</span>
+                                @elseif (! $cotizacion->esRecogidaADomicilio() && filled($cotizacion->partner?->nombre))
+                                    <span class="block text-sm text-neutral-600 dark:text-neutral-400">{{ $cotizacion->partner->nombre }}</span>
+                                @endif
                             </dd>
                         </div>
                         <div>

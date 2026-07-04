@@ -3,6 +3,7 @@
 use App\Actions\Cotizaciones\CrearCotizacion;
 use App\Models\Cliente;
 use App\Models\Cotizacion;
+use App\Services\ExportarCotizacionPng;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -164,4 +165,70 @@ test('la descarga interna de PDF responde 404 si la cotizacion no existe', funct
     $this->withToken('token-secreto-pruebas')
         ->getJson('/api/internal/quotes/99999/pdf')
         ->assertNotFound();
+});
+
+test('el POST interno devuelve la URL interna del PNG', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/quotes', payloadCotizacionApi());
+
+    $response->assertCreated()
+        ->assertJsonStructure(['internal_png_url', 'png_download_endpoint']);
+
+    expect($response->json('internal_png_url'))->toContain('/api/internal/quotes/')
+        ->and($response->json('internal_png_url'))->toContain('/png');
+});
+
+test('el endpoint interno guarda la recepcion a domicilio usando la direccion del cliente', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+
+    $payload = [...payloadCotizacionApi(), 'tipo_recepcion' => 'recogido_a_domicilio'];
+    $payload['cliente']['direccion'] = 'Av. Convención 500, Aguascalientes';
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/quotes', $payload);
+
+    $response->assertCreated()
+        ->assertJsonPath('tipo_recepcion', 'recogido_a_domicilio')
+        ->assertJsonPath('direccion_recepcion', 'Av. Convención 500, Aguascalientes');
+});
+
+test('el endpoint interno rechaza recepcion a domicilio sin direccion', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cliente = Cliente::create(['nombre' => 'Cliente sin direccion', 'telefono' => '555', 'tipo_cliente' => 'mantenimiento']);
+
+    $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/quotes', [
+            'cliente_id' => $cliente->id,
+            'tipo_recepcion' => 'recogido_a_domicilio',
+            'items' => [['tipo' => 'servicio', 'descripcion' => 'Diagnóstico', 'cantidad' => 1, 'precio_unitario' => 250]],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['direccion_recepcion']);
+});
+
+test('la descarga interna de PNG rechaza peticiones sin token', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cotizacion = crearCotizacionApiPrueba();
+
+    $this->getJson("/api/internal/quotes/{$cotizacion->id}/png")->assertUnauthorized();
+});
+
+test('la descarga interna de PNG responde 200 con imagen y folio en el nombre', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cotizacion = crearCotizacionApiPrueba();
+
+    $this->mock(ExportarCotizacionPng::class, function ($mock) use ($cotizacion) {
+        $mock->shouldReceive('generar')->once()->andReturn("\x89PNG\r\n\x1a\nfake");
+        $mock->shouldReceive('nombreArchivo')->andReturn('cotizacion-'.$cotizacion->folio.'.png');
+    });
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->get("/api/internal/quotes/{$cotizacion->id}/png");
+
+    $response->assertOk()->assertHeader('content-type', 'image/png');
+
+    expect($response->headers->get('content-disposition'))
+        ->toContain('cotizacion-'.$cotizacion->folio.'.png');
 });

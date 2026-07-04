@@ -29,6 +29,7 @@ class ActualizarCotizacion
             }
 
             $this->validarEquipo($data);
+            $recepcion = $this->resolverRecepcion($data, $cotizacion);
             $resumen = $this->calculadora->resumen(
                 $items,
                 (float) ($data['descuento'] ?? 0),
@@ -40,6 +41,7 @@ class ActualizarCotizacion
                 'equipo_id' => $data['equipo_id'] ?? null,
                 'fecha' => $data['fecha'],
                 'vigencia' => $data['vigencia'] ?? null,
+                ...$recepcion,
                 ...$resumen,
                 'notas' => $data['notas'] ?? null,
             ]);
@@ -58,6 +60,30 @@ class ActualizarCotizacion
 
             return $cotizacion->fresh(['items', 'cliente', 'equipo']);
         });
+    }
+
+    /**
+     * Normalize the reception snapshot; keeps the stored value when the
+     * request omits the fields so existing quotes do not lose context.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function resolverRecepcion(array $data, Cotizacion $cotizacion): array
+    {
+        $tipo = $data['tipo_recepcion'] ?? $cotizacion->tipo_recepcion ?? 'en_negocio';
+        $direccion = $data['direccion_recepcion'] ?? $cotizacion->direccion_recepcion;
+
+        if ($tipo === 'recogido_a_domicilio' && blank($direccion)) {
+            throw ValidationException::withMessages([
+                'direccion_recepcion' => 'Captura la dirección del cliente cuando el equipo se recoge a domicilio.',
+            ]);
+        }
+
+        return [
+            'tipo_recepcion' => $tipo,
+            'direccion_recepcion' => $tipo === 'recogido_a_domicilio' ? $direccion : null,
+        ];
     }
 
     /** @param array<string, mixed> $data */

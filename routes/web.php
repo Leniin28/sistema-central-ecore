@@ -43,6 +43,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('cotizaciones/{cotizacion}/pdf', [CotizacionController::class, 'pdf'])
             ->name('cotizaciones.pdf');
+        Route::get('cotizaciones/{cotizacion}/png', [CotizacionController::class, 'png'])
+            ->name('cotizaciones.png');
         Route::get('cotizaciones/{cotizacion}/plantilla', [CotizacionController::class, 'plantilla'])
             ->name('cotizaciones.plantilla');
         Route::post('cotizaciones/{cotizacion}/estado', [CotizacionController::class, 'cambiarEstado'])
@@ -68,6 +70,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('cotizaciones/{cotizacion}/pdf', [CotizacionController::class, 'pdf'])
             ->name('cotizaciones.pdf');
+        Route::get('cotizaciones/{cotizacion}/png', [CotizacionController::class, 'png'])
+            ->name('cotizaciones.png');
         Route::get('cotizaciones/{cotizacion}/plantilla', [CotizacionController::class, 'plantilla'])
             ->name('cotizaciones.plantilla');
         Route::post('cotizaciones/{cotizacion}/estado', [CotizacionController::class, 'cambiarEstado'])

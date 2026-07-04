@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Cotizacion;
 use App\Models\CotizacionItem;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -35,6 +36,13 @@ class StoreCotizacionRequest extends FormRequest
             'equipo_id' => ['nullable', 'exists:equipos,id'],
             'fecha' => ['required', 'date'],
             'vigencia' => ['nullable', 'date', 'after_or_equal:fecha'],
+            'tipo_recepcion' => ['nullable', Rule::in(Cotizacion::TIPOS_RECEPCION)],
+            'direccion_recepcion' => [
+                'nullable',
+                'string',
+                'max:500',
+                'required_if:tipo_recepcion,recogido_a_domicilio',
+            ],
             'descuento' => ['nullable', 'numeric', 'min:0'],
             'anticipo' => ['nullable', 'numeric', 'min:0'],
             'notas' => ['nullable', 'string', 'max:3000'],
@@ -44,6 +52,14 @@ class StoreCotizacionRequest extends FormRequest
             'items.*.descripcion' => ['required', 'string', 'max:255'],
             'items.*.cantidad' => ['required', 'integer', 'min:1'],
             'items.*.precio_unitario' => ['required', 'numeric', 'min:0'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'direccion_recepcion.required_if' => 'Captura la dirección del cliente cuando el equipo se recoge a domicilio.',
         ];
     }
 }

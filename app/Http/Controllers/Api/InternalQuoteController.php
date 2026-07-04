@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Cotizacion;
 use App\Models\CotizacionItem;
 use App\Services\ExportarCotizacionPdf;
+use App\Services\ExportarCotizacionPng;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -45,6 +46,9 @@ class InternalQuoteController extends Controller
             'notas' => ['nullable', 'string', 'max:3000'],
             'vigencia' => ['nullable', 'date'],
             'external_id' => ['nullable', 'string', 'max:255'],
+
+            'tipo_recepcion' => ['nullable', Rule::in(Cotizacion::TIPOS_RECEPCION)],
+            'direccion_recepcion' => ['nullable', 'string', 'max:500'],
         ]);
 
         try {
@@ -84,9 +88,13 @@ class InternalQuoteController extends Controller
                 'marca' => $cotizacion->equipo->marca,
                 'modelo' => $cotizacion->equipo->modelo,
             ] : null,
-            // URL interna que OpenClaw debe usar: descarga el PDF con el mismo Bearer Token, sin sesión web.
+            'tipo_recepcion' => $cotizacion->tipo_recepcion,
+            'direccion_recepcion' => $cotizacion->direccion_recepcion,
+            // URLs internas que OpenClaw debe usar: descargan PDF/PNG con el mismo Bearer Token, sin sesión web.
             'internal_pdf_url' => route('api.internal.quotes.pdf', $cotizacion),
+            'internal_png_url' => route('api.internal.quotes.png', $cotizacion),
             'pdf_download_endpoint' => route('api.internal.quotes.pdf', $cotizacion, false),
+            'png_download_endpoint' => route('api.internal.quotes.png', $cotizacion, false),
             // Rutas del panel web: solo funcionan para usuarios autenticados con sesión (no para OpenClaw).
             'pdf_url' => route('admin.cotizaciones.pdf', $cotizacion),
             'show_url' => route('admin.cotizaciones.show', $cotizacion),
@@ -105,5 +113,32 @@ class InternalQuoteController extends Controller
         ]);
 
         return $exportador->generar($cotizacion)->download($exportador->nombreArchivo($cotizacion));
+    }
+
+    /**
+     * Download the PNG of a quote from the internal API (OpenClaw), without a web session.
+     */
+    public function png(Cotizacion $cotizacion, ExportarCotizacionPng $exportador): Response|JsonResponse
+    {
+        try {
+            $imagen = $exportador->generar($cotizacion);
+        } catch (\RuntimeException $exception) {
+            Log::warning('API interna: fallo al generar PNG de cotización.', [
+                'cotizacion_id' => $cotizacion->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json(['message' => $exception->getMessage()], 503);
+        }
+
+        Log::info('API interna: descarga de PNG de cotización.', [
+            'cotizacion_id' => $cotizacion->id,
+            'folio' => $cotizacion->folio,
+        ]);
+
+        return response($imagen, 200, [
+            'Content-Type' => 'image/png',
+            'Content-Disposition' => 'attachment; filename="'.$exportador->nombreArchivo($cotizacion).'"',
+        ]);
     }
 }

@@ -1,18 +1,32 @@
-{{-- Contenido compartido entre la plantilla imprimible y el PDF (dompdf solo soporta CSS simple). --}}
+{{-- Contenido compartido entre la plantilla imprimible, el PDF y el PNG (dompdf solo soporta CSS simple). --}}
+@php
+    // Logo incrustado en base64 para que funcione igual en navegador, dompdf y capturas headless (file://).
+    $logoRuta = filled($negocio['logo'] ?? null) ? public_path($negocio['logo']) : null;
+    $logoBase64 = ($logoRuta && is_file($logoRuta)) ? base64_encode(file_get_contents($logoRuta)) : null;
+@endphp
 <div style="font-family: DejaVu Sans, Helvetica, Arial, sans-serif; color: #1f2937; font-size: 12px; line-height: 1.5;">
     <table style="width: 100%; border-collapse: collapse;">
         <tr>
             <td style="vertical-align: top;">
-                <div style="font-size: 20px; font-weight: bold; color: #111827;">{{ $negocio['nombre'] }}</div>
-                @if (filled($negocio['direccion']))
-                    <div>{{ $negocio['direccion'] }}</div>
+                @if ($logoBase64)
+                    <img src="data:image/png;base64,{{ $logoBase64 }}" alt="{{ $negocio['nombre'] }}" style="height: 58px; width: auto;">
+                @else
+                    <div style="font-size: 20px; font-weight: bold; color: #111827;">{{ $negocio['nombre'] }}</div>
+                    @if (filled($negocio['eslogan'] ?? null))
+                        <div style="color: #6b7280;">{{ $negocio['eslogan'] }}</div>
+                    @endif
                 @endif
-                @if (filled($negocio['telefono']))
-                    <div>Tel: {{ $negocio['telefono'] }}</div>
-                @endif
-                @if (filled($negocio['correo']))
-                    <div>{{ $negocio['correo'] }}</div>
-                @endif
+                <div style="margin-top: 6px;">
+                    @if (filled($negocio['direccion']))
+                        <div>{{ $negocio['direccion'] }}</div>
+                    @endif
+                    @if (filled($negocio['telefono']))
+                        <div>Tel: {{ $negocio['telefono'] }}</div>
+                    @endif
+                    @if (filled($negocio['correo']))
+                        <div>{{ $negocio['correo'] }}</div>
+                    @endif
+                </div>
             </td>
             <td style="vertical-align: top; text-align: right;">
                 <div style="font-size: 16px; font-weight: bold; color: #111827;">COTIZACIÓN</div>
@@ -42,6 +56,19 @@
                     <div style="font-weight: bold;">{{ $cotizacion->equipo->tipo_equipo }} {{ $cotizacion->equipo->marca }} {{ $cotizacion->equipo->modelo }}</div>
                     @if (filled($cotizacion->equipo->numero_serie))
                         <div>Serie: {{ $cotizacion->equipo->numero_serie }}</div>
+                    @endif
+                @endif
+
+                <div style="margin-top: 8px; font-weight: bold; color: #6b7280; text-transform: uppercase; font-size: 10px;">Ubicación de recepción</div>
+                @if ($cotizacion->esRecogidaADomicilio())
+                    <div style="font-weight: bold;">Recogido a domicilio</div>
+                    @if (filled($cotizacion->direccion_recepcion))
+                        <div>{{ $cotizacion->direccion_recepcion }}</div>
+                    @endif
+                @else
+                    <div style="font-weight: bold;">En negocio</div>
+                    @if (filled($cotizacion->partner?->nombre))
+                        <div>{{ $cotizacion->partner->nombre }}</div>
                     @endif
                 @endif
             </td>

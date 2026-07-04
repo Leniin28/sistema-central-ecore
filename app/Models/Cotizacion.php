@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'fecha',
     'vigencia',
     'estado',
+    'tipo_recepcion',
+    'direccion_recepcion',
     'subtotal',
     'descuento',
     'anticipo',
@@ -41,6 +43,13 @@ class Cotizacion extends Model
      * @var list<string>
      */
     public const ESTADOS_EDITABLES = ['borrador', 'enviada'];
+
+    /**
+     * The ways the equipment can be received.
+     *
+     * @var list<string>
+     */
+    public const TIPOS_RECEPCION = ['en_negocio', 'recogido_a_domicilio'];
 
     /**
      * Get the attributes that should be cast.
@@ -106,5 +115,21 @@ class Cotizacion extends Model
     public function esEditable(): bool
     {
         return in_array($this->estado, self::ESTADOS_EDITABLES, true);
+    }
+
+    /**
+     * Determine if the equipment was picked up at the client's address.
+     */
+    public function esRecogidaADomicilio(): bool
+    {
+        return $this->tipo_recepcion === 'recogido_a_domicilio';
+    }
+
+    /**
+     * Get the human readable label for the reception type.
+     */
+    public function etiquetaRecepcion(): string
+    {
+        return $this->esRecogidaADomicilio() ? 'Recogido a domicilio' : 'En negocio';
     }
 }

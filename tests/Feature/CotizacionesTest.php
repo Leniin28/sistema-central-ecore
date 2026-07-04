@@ -6,6 +6,7 @@ use App\Models\Cotizacion;
 use App\Models\Equipo;
 use App\Models\Partner;
 use App\Models\User;
+use App\Services\ExportarCotizacionPng;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 
@@ -155,4 +156,100 @@ test('socio logistico solo ve cotizaciones de su partner', function () {
     $this->actingAs($logistico)
         ->get(route('logistica.cotizaciones.show', $ajena))
         ->assertNotFound();
+});
+
+test('la cotizacion guarda la recepcion a domicilio con direccion', function () {
+    $datos = datosCotizacion();
+
+    $this->actingAs($datos['admin'])->post(route('admin.cotizaciones.store'), [
+        'cliente_id' => $datos['cliente']->id,
+        'fecha' => today()->format('Y-m-d'),
+        'tipo_recepcion' => 'recogido_a_domicilio',
+        'direccion_recepcion' => 'Av. Aguascalientes 123, Col. Centro',
+        'items' => itemsCotizacion(),
+    ])->assertRedirect();
+
+    $cotizacion = Cotizacion::firstOrFail();
+    expect($cotizacion->tipo_recepcion)->toBe('recogido_a_domicilio')
+        ->and($cotizacion->direccion_recepcion)->toBe('Av. Aguascalientes 123, Col. Centro')
+        ->and($cotizacion->esRecogidaADomicilio())->toBeTrue();
+});
+
+test('la recepcion a domicilio requiere direccion', function () {
+    $datos = datosCotizacion();
+
+    $this->actingAs($datos['admin'])->post(route('admin.cotizaciones.store'), [
+        'cliente_id' => $datos['cliente']->id,
+        'fecha' => today()->format('Y-m-d'),
+        'tipo_recepcion' => 'recogido_a_domicilio',
+        'items' => itemsCotizacion(),
+    ])->assertSessionHasErrors('direccion_recepcion');
+
+    expect(Cotizacion::count())->toBe(0);
+});
+
+test('sin tipo de recepcion la cotizacion queda como en negocio', function () {
+    $datos = datosCotizacion();
+
+    $cotizacion = app(CrearCotizacion::class)->ejecutar([
+        'cliente_id' => $datos['cliente']->id,
+    ], itemsCotizacion(), $datos['admin']);
+
+    expect($cotizacion->tipo_recepcion)->toBe('en_negocio')
+        ->and($cotizacion->direccion_recepcion)->toBeNull()
+        ->and($cotizacion->etiquetaRecepcion())->toBe('En negocio');
+});
+
+test('la plantilla muestra la ubicacion de recepcion y los datos del negocio', function () {
+    $datos = datosCotizacion();
+    $cotizacion = app(CrearCotizacion::class)->ejecutar([
+        'cliente_id' => $datos['cliente']->id,
+        'tipo_recepcion' => 'recogido_a_domicilio',
+        'direccion_recepcion' => 'Calle Ficticia 45, Aguascalientes',
+    ], itemsCotizacion(), $datos['admin']);
+
+    $this->actingAs($datos['admin'])
+        ->get(route('admin.cotizaciones.plantilla', $cotizacion))
+        ->assertOk()
+        ->assertSee('Recogido a domicilio')
+        ->assertSee('Calle Ficticia 45, Aguascalientes')
+        ->assertSee(config('negocio.telefono'));
+});
+
+test('la ruta de PNG descarga una imagen', function () {
+    $datos = datosCotizacion();
+    $cotizacion = app(CrearCotizacion::class)->ejecutar([
+        'cliente_id' => $datos['cliente']->id,
+    ], itemsCotizacion(), $datos['admin']);
+
+    $this->mock(ExportarCotizacionPng::class, function ($mock) use ($cotizacion) {
+        $mock->shouldReceive('generar')->once()->andReturn("\x89PNG\r\n\x1a\nfake");
+        $mock->shouldReceive('nombreArchivo')->andReturn('cotizacion-'.$cotizacion->folio.'.png');
+    });
+
+    $response = $this->actingAs($datos['admin'])
+        ->get(route('admin.cotizaciones.png', $cotizacion));
+
+    $response->assertOk()->assertHeader('content-type', 'image/png');
+    expect($response->headers->get('content-disposition'))->toContain('.png');
+});
+
+test('la exportacion PNG real genera una imagen valida', function () {
+    $exportador = app(ExportarCotizacionPng::class);
+
+    if (! $exportador->navegadorDisponible()) {
+        $this->markTestSkipped('No hay navegador headless (Edge/Chrome) disponible en este entorno.');
+    }
+
+    $datos = datosCotizacion();
+    $cotizacion = app(CrearCotizacion::class)->ejecutar([
+        'cliente_id' => $datos['cliente']->id,
+        'tipo_recepcion' => 'recogido_a_domicilio',
+        'direccion_recepcion' => 'Av. Prueba 1, Aguascalientes',
+    ], itemsCotizacion(), $datos['admin']);
+
+    $imagen = $exportador->generar($cotizacion);
+
+    expect(substr($imagen, 0, 8))->toBe("\x89PNG\r\n\x1a\n")
+        ->and(strlen($imagen))->toBeGreaterThan(10000);
 });

@@ -11,6 +11,7 @@ use App\Models\Cliente;
 use App\Models\Cotizacion;
 use App\Models\Equipo;
 use App\Services\ExportarCotizacionPdf;
+use App\Services\ExportarCotizacionPng;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -65,7 +66,7 @@ class CotizacionController extends Controller
     public function show(Cotizacion $cotizacion): View
     {
         $this->autorizarAcceso($cotizacion);
-        $cotizacion->load(['items', 'cliente', 'equipo']);
+        $cotizacion->load(['items', 'cliente', 'equipo', 'partner']);
 
         return view('cotizaciones.show', [
             'cotizacion' => $cotizacion,
@@ -156,12 +157,31 @@ class CotizacionController extends Controller
     }
 
     /**
+     * Download the quote as a PNG image (for sharing by chat).
+     */
+    public function png(Cotizacion $cotizacion, ExportarCotizacionPng $exportador): Response
+    {
+        $this->autorizarAcceso($cotizacion);
+
+        try {
+            $imagen = $exportador->generar($cotizacion);
+        } catch (\RuntimeException $exception) {
+            abort(503, $exception->getMessage());
+        }
+
+        return response($imagen, 200, [
+            'Content-Type' => 'image/png',
+            'Content-Disposition' => 'attachment; filename="'.$exportador->nombreArchivo($cotizacion).'"',
+        ]);
+    }
+
+    /**
      * Display the printable template for the quote.
      */
     public function plantilla(Cotizacion $cotizacion): View
     {
         $this->autorizarAcceso($cotizacion);
-        $cotizacion->load(['items', 'cliente', 'equipo']);
+        $cotizacion->load(['items', 'cliente', 'equipo', 'partner']);
 
         return view('cotizaciones.plantilla', [
             'cotizacion' => $cotizacion,

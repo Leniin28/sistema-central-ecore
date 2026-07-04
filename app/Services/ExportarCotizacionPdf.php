@@ -13,7 +13,7 @@ class ExportarCotizacionPdf
      */
     public function generar(Cotizacion $cotizacion): PdfDocument
     {
-        $cotizacion->loadMissing(['items', 'cliente', 'equipo']);
+        $cotizacion->loadMissing(['items', 'cliente', 'equipo', 'partner']);
 
         return Pdf::loadView('cotizaciones.pdf', [
             'cotizacion' => $cotizacion,
