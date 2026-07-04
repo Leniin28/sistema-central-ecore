@@ -219,6 +219,21 @@ Las operaciones financieras o destructivas deben requerir permisos específicos 
 
 ---
 
+## Mapa del código con Graphify
+
+El proyecto tiene un grafo de conocimiento en `graphify-out/` (ver `docs/ai/graphify.md`).
+
+Antes de modificar código existente, los agentes IA deben acotar el alcance con Graphify en lugar de explorar todo el proyecto:
+
+- `graphify query "¿Cómo está organizado este módulo en ECore?"`
+- `graphify query "¿Qué archivos se verían afectados por este cambio?"`
+- `graphify explain "<símbolo o clase>"`
+- `graphify path "<símbolo A>" "<símbolo B>"`
+
+Regla: no abrir archivos completos ni recorrer carpetas enteras si Graphify puede identificar primero los archivos relevantes. Después de modificar código, ejecutar `graphify update .` (el hook post-commit también lo hace automáticamente al commitear).
+
+---
+
 ## Reglas generales de trabajo
 
 - Leer `AGENTS.md` antes de modificar código.
