@@ -90,5 +90,11 @@
                 </div>
             </dl>
         </section>
+
+        <section class="max-w-4xl rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
+            <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Cotizaciones del equipo</h2>
+
+            @include('cotizaciones._historial')
+        </section>
     </div>
 </x-layouts::app>

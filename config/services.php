@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'openclaw' => [
+        'internal_api_token' => env('OPENCLAW_INTERNAL_API_TOKEN'),
+    ],
+
 ];

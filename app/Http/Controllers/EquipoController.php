@@ -55,8 +55,14 @@ class EquipoController extends Controller
     {
         $equipo->load('cliente');
 
+        $cotizaciones = $equipo->cotizaciones()
+            ->when(! auth()->user()->isAdmin(), fn ($query) => $query->where('partner_id', auth()->user()->partner_id))
+            ->latest()
+            ->get();
+
         return view('equipos.show', [
             'equipo' => $equipo,
+            'cotizaciones' => $cotizaciones,
             'routePrefix' => $this->routePrefix(),
         ]);
     }

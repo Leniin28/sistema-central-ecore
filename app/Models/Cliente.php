@@ -32,4 +32,12 @@ class Cliente extends Model
     {
         return $this->hasMany(MovimientoFinanciero::class);
     }
+
+    /**
+     * Get the quotes registered for the client.
+     */
+    public function cotizaciones(): HasMany
+    {
+        return $this->hasMany(Cotizacion::class);
+    }
 }

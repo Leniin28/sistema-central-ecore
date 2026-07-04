@@ -24,6 +24,9 @@
                         <flux:sidebar.item icon="clipboard-document-list" :href="route($prefix.'.ordenes-servicio.index')" :current="request()->routeIs($prefix.'.ordenes-servicio.*')">
                             Órdenes
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="document-text" :href="route($prefix.'.cotizaciones.index')" :current="request()->routeIs($prefix.'.cotizaciones.*')">
+                            Cotizaciones
+                        </flux:sidebar.item>
                         <flux:sidebar.item icon="users" :href="route($prefix.'.clientes.index')" :current="request()->routeIs($prefix.'.clientes.*')">
                             Clientes
                         </flux:sidebar.item>

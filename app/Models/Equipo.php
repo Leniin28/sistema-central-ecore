@@ -34,4 +34,12 @@ class Equipo extends Model
     {
         return $this->hasMany(OrdenServicio::class);
     }
+
+    /**
+     * Get the quotes registered for the equipment.
+     */
+    public function cotizaciones(): HasMany
+    {
+        return $this->hasMany(Cotizacion::class);
+    }
 }

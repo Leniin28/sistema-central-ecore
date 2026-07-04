@@ -57,5 +57,16 @@
                 </div>
             </dl>
         </section>
+
+        <section class="max-w-3xl rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Cotizaciones</h2>
+                <a href="{{ route($routePrefix.'.cotizaciones.create') }}" class="text-sm font-medium text-neutral-700 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-neutral-100">
+                    Nueva cotización
+                </a>
+            </div>
+
+            @include('cotizaciones._historial')
+        </section>
     </div>
 </x-layouts::app>

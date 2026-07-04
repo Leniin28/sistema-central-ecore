@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\CategoriaServicioController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\DashboardRedirectController;
 use App\Http\Controllers\EquipoController;
 use App\Http\Controllers\LogisticaDashboardController;
@@ -39,6 +40,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('categorias-servicio', CategoriaServicioController::class)
             ->parameters(['categorias-servicio' => 'categoriaServicio']);
         Route::resource('servicios', ServicioController::class);
+
+        Route::get('cotizaciones/{cotizacion}/pdf', [CotizacionController::class, 'pdf'])
+            ->name('cotizaciones.pdf');
+        Route::get('cotizaciones/{cotizacion}/plantilla', [CotizacionController::class, 'plantilla'])
+            ->name('cotizaciones.plantilla');
+        Route::post('cotizaciones/{cotizacion}/estado', [CotizacionController::class, 'cambiarEstado'])
+            ->name('cotizaciones.estado.store');
+        Route::resource('cotizaciones', CotizacionController::class)
+            ->parameters(['cotizaciones' => 'cotizacion']);
     });
 
     Route::middleware('role:socio_logistico')->prefix('logistica')->name('logistica.')->group(function () {
@@ -55,6 +65,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('ordenes-servicio', OrdenServicioController::class)
             ->only(['index', 'create', 'store', 'show'])
             ->parameters(['ordenes-servicio' => 'ordenServicio']);
+
+        Route::get('cotizaciones/{cotizacion}/pdf', [CotizacionController::class, 'pdf'])
+            ->name('cotizaciones.pdf');
+        Route::get('cotizaciones/{cotizacion}/plantilla', [CotizacionController::class, 'plantilla'])
+            ->name('cotizaciones.plantilla');
+        Route::post('cotizaciones/{cotizacion}/estado', [CotizacionController::class, 'cambiarEstado'])
+            ->name('cotizaciones.estado.store');
+        Route::resource('cotizaciones', CotizacionController::class)
+            ->only(['index', 'create', 'store', 'show', 'edit', 'update'])
+            ->parameters(['cotizaciones' => 'cotizacion']);
     });
 
     Route::middleware('role:socio_tecnico')->prefix('tecnico')->name('tecnico.')->group(function () {

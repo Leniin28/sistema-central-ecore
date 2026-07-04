@@ -51,8 +51,14 @@ class ClienteController extends Controller
      */
     public function show(Cliente $cliente): View
     {
+        $cotizaciones = $cliente->cotizaciones()
+            ->when(! auth()->user()->isAdmin(), fn ($query) => $query->where('partner_id', auth()->user()->partner_id))
+            ->latest()
+            ->get();
+
         return view('clientes.show', [
             'cliente' => $cliente,
+            'cotizaciones' => $cotizaciones,
             'routePrefix' => $this->routePrefix(),
         ]);
     }
