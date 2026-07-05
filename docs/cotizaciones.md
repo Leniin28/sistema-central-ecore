@@ -95,16 +95,50 @@ log básico de cada descarga interna.
 
 Crear una cotización:
 
+> **Importante (Windows PowerShell 5.1):** `Invoke-RestMethod` codifica un `-Body`
+> de tipo *string* como ISO-8859-1, no como UTF-8. Si el JSON contiene acentos
+> (p. ej. `"Diagnóstico"`), la `ó` viaja como byte inválido, Laravel no puede
+> parsear el cuerpo y responde **422** con `cliente`/`cliente_id`/`items` marcados
+> como *required* (el payload nunca llegó). Envía el cuerpo como **bytes UTF-8**
+> (`[Text.Encoding]::UTF8.GetBytes(...)`) y añade `charset=utf-8` al `Content-Type`.
+> En PowerShell 7+ no ocurre, pero enviar bytes es compatible en ambas versiones.
+
 ```powershell
 $token = "TU_TOKEN"
+$body = @'
+{
+  "cliente": { "nombre": "Cliente Telegram", "telefono": "5551112233" },
+  "tipo_recepcion": "recogido_a_domicilio",
+  "direccion_recepcion": "Calle prueba #123",
+  "items": [ { "tipo": "servicio", "descripcion": "Diagnóstico", "cantidad": 1, "precio_unitario": 250 } ],
+  "anticipo": 100,
+  "external_id": "msg-001"
+}
+'@
+
 $crear = Invoke-RestMethod -Method Post `
   -Uri "http://sistema-central-ecore.test/api/internal/quotes" `
-  -Headers @{ Authorization = "Bearer $token" } `
-  -ContentType "application/json" `
-  -Body '{"cliente":{"nombre":"Cliente Telegram","telefono":"5551112233"},"items":[{"tipo":"servicio","descripcion":"Diagnóstico","cantidad":1,"precio_unitario":250}],"anticipo":100,"external_id":"msg-001"}'
+  -Headers @{ Authorization = "Bearer $token"; Accept = "application/json" } `
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
 
-$crear.folio            # COT-20260704-0001
+$crear.folio            # COT-20260705-0001
 $crear.internal_pdf_url # URL interna del PDF
+```
+
+Si aun así recibes un `422`, imprime el cuerpo real del error para ver qué campo
+falla (no basta con el código de estado):
+
+```powershell
+try {
+  Invoke-RestMethod -Method Post -Uri "http://sistema-central-ecore.test/api/internal/quotes" `
+    -Headers @{ Authorization = "Bearer $token"; Accept = "application/json" } `
+    -ContentType "application/json; charset=utf-8" `
+    -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+} catch {
+  $r = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+  $r.ReadToEnd()   # JSON con { "message": ..., "errors": { ... } }
+}
 ```
 
 Descargar el PDF de esa cotización a un archivo local:

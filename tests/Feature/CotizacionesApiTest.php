@@ -194,6 +194,37 @@ test('el endpoint interno guarda la recepcion a domicilio usando la direccion de
         ->assertJsonPath('direccion_recepcion', 'Av. Convención 500, Aguascalientes');
 });
 
+test('el endpoint interno acepta el payload completo de OpenClaw (cliente rapido, domicilio, direccion, anticipo y external_id)', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+
+    // Equivalente al payload probado desde PowerShell: cliente creado al vuelo,
+    // items, recogida a domicilio con dirección explícita, anticipo y external_id.
+    $payload = [
+        'cliente' => ['nombre' => 'Cliente Telegram', 'telefono' => '5551112233'],
+        'tipo_recepcion' => 'recogido_a_domicilio',
+        'direccion_recepcion' => 'Calle prueba #123',
+        'items' => [
+            ['tipo' => 'servicio', 'descripcion' => 'Diagnóstico', 'cantidad' => 1, 'precio_unitario' => 250],
+        ],
+        'anticipo' => 100,
+        'external_id' => 'telegram-test-002',
+    ];
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/quotes', $payload);
+
+    $response->assertCreated()
+        ->assertJsonPath('estado', 'borrador')
+        ->assertJsonPath('tipo_recepcion', 'recogido_a_domicilio')
+        ->assertJsonPath('direccion_recepcion', 'Calle prueba #123')
+        ->assertJsonPath('external_id', 'telegram-test-002')
+        ->assertJsonPath('total', 250)
+        ->assertJsonPath('anticipo', 100)
+        ->assertJsonPath('saldo', 150);
+
+    expect(Cliente::where('nombre', 'Cliente Telegram')->exists())->toBeTrue();
+});
+
 test('el endpoint interno rechaza recepcion a domicilio sin direccion', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
     $cliente = Cliente::create(['nombre' => 'Cliente sin direccion', 'telefono' => '555', 'tipo_cliente' => 'mantenimiento']);
