@@ -37,6 +37,9 @@ return [
 
     'openclaw' => [
         'internal_api_token' => env('OPENCLAW_INTERNAL_API_TOKEN'),
+        // Usuario de sistema al que se atribuyen las recepciones creadas por la
+        // API interna (las órdenes exigen un creador real; no hay sesión web).
+        'system_user_email' => env('OPENCLAW_SYSTEM_USER_EMAIL', 'openclaw-bot@sistema.local'),
     ],
 
 ];

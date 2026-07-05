@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'folio',
+    'external_id',
+    'origen',
     'cliente_id',
     'equipo_id',
     'creado_por_user_id',
