@@ -3,6 +3,7 @@
 use App\Models\Cliente;
 use App\Models\Equipo;
 use App\Models\OrdenServicio;
+use App\Models\Partner;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -171,6 +172,127 @@ test('la API de recepción exige cliente y equipo identificable', function () {
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['cliente_id', 'cliente', 'equipo.tipo_equipo', 'equipo.modelo']);
+});
+
+function crearPartnersLogisticos(): void
+{
+    Partner::create(['nombre' => 'Electrocom Alameda', 'tipo_socio' => 'logistico', 'activo' => true]);
+    Partner::create(['nombre' => 'Electrocom Rodolfo', 'tipo_socio' => 'logistico', 'activo' => true]);
+}
+
+test('la API de recepción asigna el partner logístico por nombre exacto de sucursal', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    crearPartnersLogisticos();
+    $alameda = Partner::where('nombre', 'Electrocom Alameda')->first();
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', payloadRecepcionApi([
+            'recepcion' => ['partner_logistico' => 'Electrocom Alameda'],
+            'external_id' => 'telegram-photo-alameda',
+        ]));
+
+    $response->assertCreated()
+        ->assertJsonPath('partner_recepcion.id', $alameda->id)
+        ->assertJsonPath('partner_recepcion.nombre', 'Electrocom Alameda');
+
+    $orden = OrdenServicio::firstWhere('external_id', 'telegram-photo-alameda');
+    expect($orden->partner_recepcion_id)->toBe($alameda->id);
+});
+
+test('la API de recepción resuelve variantes cortas de sucursal como "Alameda"', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    crearPartnersLogisticos();
+    $alameda = Partner::where('nombre', 'Electrocom Alameda')->first();
+
+    // Forma simple top-level y variante corta.
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', payloadRecepcionApi([
+            'partner_logistico' => 'Alameda',
+            'external_id' => 'telegram-photo-alameda-corta',
+        ]));
+
+    $response->assertCreated()->assertJsonPath('partner_recepcion.id', $alameda->id);
+    expect($response->json('warnings'))->not->toContain('No se encontró un partner logístico');
+});
+
+test('la API de recepción acepta partner_recepcion_id explícito y válido', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    crearPartnersLogisticos();
+    $rodolfo = Partner::where('nombre', 'Electrocom Rodolfo')->first();
+
+    $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', payloadRecepcionApi([
+            'recepcion' => ['partner_recepcion_id' => $rodolfo->id],
+            'external_id' => 'telegram-photo-rodolfo-id',
+        ]))
+        ->assertCreated()
+        ->assertJsonPath('partner_recepcion.id', $rodolfo->id);
+});
+
+test('la API de recepción rechaza un partner_recepcion_id que no es logístico activo', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $tecnico = Partner::create(['nombre' => 'Taller Técnico', 'tipo_socio' => 'tecnico', 'activo' => true]);
+
+    $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', payloadRecepcionApi([
+            'recepcion' => ['partner_recepcion_id' => $tecnico->id],
+            'external_id' => 'telegram-photo-bad-partner',
+        ]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['recepcion.partner_recepcion_id']);
+
+    expect(OrdenServicio::count())->toBe(0);
+});
+
+test('la API de recepción no falla si la sucursal no existe: crea la orden con warning y texto en notas', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    crearPartnersLogisticos();
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', payloadRecepcionApi([
+            'recepcion' => ['partner_logistico' => 'Sucursal Inexistente'],
+            'external_id' => 'telegram-photo-sin-sucursal',
+        ]));
+
+    $response->assertCreated()
+        ->assertJsonPath('partner_recepcion', null);
+
+    expect(collect($response->json('warnings'))->contains(fn ($w) => str_contains($w, 'Sucursal Inexistente')))->toBeTrue();
+
+    $orden = OrdenServicio::firstWhere('external_id', 'telegram-photo-sin-sucursal');
+    expect($orden->partner_recepcion_id)->toBeNull()
+        ->and($orden->notas)->toContain('Sucursal Inexistente');
+});
+
+test('la API de recepción no adivina cuando la sucursal es ambigua', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    crearPartnersLogisticos();
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', payloadRecepcionApi([
+            'recepcion' => ['partner_logistico' => 'Electrocom'],
+            'external_id' => 'telegram-photo-ambigua',
+        ]));
+
+    $response->assertCreated()->assertJsonPath('partner_recepcion', null);
+    expect(collect($response->json('warnings'))->contains(fn ($w) => str_contains($w, 'más de un partner')))->toBeTrue();
+});
+
+test('la recepción mínima sigue funcionando sin partner', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    crearPartnersLogisticos();
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', [
+            'cliente' => ['nombre' => 'Cliente Sin Sucursal'],
+            'equipo' => ['tipo_equipo' => 'Impresora'],
+            'external_id' => 'telegram-photo-sin-partner',
+        ]);
+
+    $response->assertCreated()->assertJsonPath('partner_recepcion', null);
+
+    $orden = OrdenServicio::firstWhere('external_id', 'telegram-photo-sin-partner');
+    expect($orden->partner_recepcion_id)->toBeNull();
 });
 
 test('la orden creada por la API interna se atribuye al usuario de sistema y sin partner', function () {

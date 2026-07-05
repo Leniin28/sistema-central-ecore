@@ -33,6 +33,7 @@ Telegram.
     "fecha_etiqueta": "2026-06-29",
     "folio_externo": "4837",
     "origen": "telegram_foto_etiqueta",
+    "partner_logistico": "Electrocom Alameda",
     "notas": "Datos extraídos de etiqueta física"
   },
   "servicios":   [ { "descripcion": "Servicio de Optimización", "precio": 550 } ],
@@ -50,6 +51,7 @@ Reglas de validación (todo opcional salvo lo indicado):
   `marca`, `numero_serie`, `password_equipo` opcionales.
 - `recepcion.falla_reportada` opcional pero recomendada (si falta, se avisa en `warnings`).
   `recepcion.fecha_etiqueta` (fecha), `folio_externo`, `origen`, `notas` opcionales.
+- **Sucursal / partner logístico** (opcional): ver sección siguiente.
 - `tipo_recepcion` opcional (`sucursal|domicilio|directo`, default `directo`).
 - `servicios[]` / `refacciones[]` opcionales: `descripcion*`, `precio` (`>= 0`).
 - `external_id` opcional — **idempotencia**: reenviar el mismo (p. ej. el `message_id`
@@ -57,6 +59,31 @@ Reglas de validación (todo opcional salvo lo indicado):
 
 Si solo llega **cliente + equipo + falla**, se crea la orden base (estado `recibido`)
 sin servicios ni refacciones.
+
+### Sucursal / partner logístico
+
+La etiqueta física suele indicar la sucursal donde se recibió el equipo (p. ej.
+*Electrocom Alameda*, *Electrocom Rodolfo*). Se resuelve al `partner_recepcion_id`
+de la orden (el mismo "Partner logístico" del formulario web). Campos aceptados
+(por orden de preferencia):
+
+1. **`partner_recepcion_id`** (id explícito) — top-level o en `recepcion`. Se valida
+   en servidor: debe ser un partner **logístico y activo**; si no, responde `422`.
+2. **Nombre de la sucursal** — `recepcion.partner_logistico` (canónico), o los alias
+   `recepcion.partner_logistico_nombre` / `recepcion.sucursal_nombre`, o el atajo
+   top-level `partner_logistico`.
+
+Resolución por nombre (solo partners logísticos activos), tolerante a variantes:
+
+- Insensible a mayúsculas/acentos/espacios.
+- Coincidencia exacta normalizada primero; si no, coincidencia parcial en cualquier
+  dirección — `"Alameda"` resuelve a `"Electrocom Alameda"`.
+- **No adivina:** si el texto coincide con más de un partner (p. ej. `"Electrocom"`)
+  o con ninguno, **no falla la recepción**: crea la orden **sin partner**, agrega un
+  `warning` y conserva el texto detectado en las notas para asignarlo en el panel.
+
+El partner asignado (o `null`) se devuelve en la respuesta como `partner_recepcion`.
+Las órdenes por API interna siguen sin exigir partner (una recepción mínima es válida).
 
 ### Servicios y refacciones: por qué van a notas
 
@@ -84,6 +111,7 @@ financieros**.
     "id": 7, "tipo_equipo": "Laptop", "marca": "HP", "modelo": "Laptop HP",
     "password_equipo_registrada": true
   },
+  "partner_recepcion": { "id": 1, "nombre": "Electrocom Alameda" },
   "show_url": "http://sistema-central-ecore.test/admin/ordenes-servicio/12",
   "mensaje_resumen": "Recepción registrada: orden OS-20260705-0001 para José Luis Olvera (Laptop HP).",
   "warnings": [ "Los servicios llegaron como texto libre; cárgalos desde el catálogo…" ]
@@ -97,6 +125,14 @@ financieros**.
   panel autenticado.
 - Los logs registran `orden_id`/`folio`/`external_id`, **nunca** la contraseña ni el
   payload en claro.
+
+### Pendientes
+
+- **Seeder de partners logísticos** (sucursales como *Electrocom Alameda* /
+  *Electrocom Rodolfo*) y del **usuario de sistema OpenClaw** para producción. Hoy
+  ambos se crean/siembran a mano; la resolución por nombre solo acierta si los
+  partners existen con nombres reconocibles. Sin seeder por ahora (decisión del
+  2026-07-05).
 
 ### Atribución (usuario de sistema)
 

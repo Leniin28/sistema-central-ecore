@@ -42,6 +42,15 @@ class InternalReceptionController extends Controller
             'recepcion.origen' => ['nullable', 'string', 'max:100'],
             'recepcion.notas' => ['nullable', 'string', 'max:3000'],
 
+            // Sucursal / partner logístico detectado en la etiqueta. Id explícito
+            // (validado como logístico activo) o nombre a resolver de forma tolerante.
+            'partner_recepcion_id' => ['nullable', 'integer', $this->reglaPartnerLogistico()],
+            'partner_logistico' => ['nullable', 'string', 'max:255'],
+            'recepcion.partner_recepcion_id' => ['nullable', 'integer', $this->reglaPartnerLogistico()],
+            'recepcion.partner_logistico' => ['nullable', 'string', 'max:255'],
+            'recepcion.partner_logistico_nombre' => ['nullable', 'string', 'max:255'],
+            'recepcion.sucursal_nombre' => ['nullable', 'string', 'max:255'],
+
             'tipo_recepcion' => ['nullable', Rule::in(['sucursal', 'domicilio', 'directo'])],
 
             // Servicios/refacciones: texto libre opcional extraído de la etiqueta.
@@ -71,6 +80,7 @@ class InternalReceptionController extends Controller
 
         /** @var OrdenServicio $orden */
         $orden = $resultado['orden'];
+        $orden->loadMissing(['cliente', 'equipo', 'partnerRecepcion']);
 
         Log::info('API interna: recepción de OpenClaw procesada.', [
             'orden_id' => $orden->id,
@@ -99,10 +109,25 @@ class InternalReceptionController extends Controller
                 // Solo se confirma que quedó registrada; NUNCA se devuelve el valor.
                 'password_equipo_registrada' => filled($orden->equipo?->password_equipo),
             ],
+            'partner_recepcion' => $orden->partnerRecepcion ? [
+                'id' => $orden->partnerRecepcion->id,
+                'nombre' => $orden->partnerRecepcion->nombre,
+            ] : null,
             'show_url' => route('admin.ordenes-servicio.show', $orden),
             'mensaje_resumen' => $this->mensajeResumen($orden, $resultado['created']),
             'warnings' => $resultado['warnings'],
         ], $resultado['created'] ? 201 : 200);
+    }
+
+    /**
+     * Rule that a partner id must reference an active logistics partner
+     * (same constraint the web reception form enforces).
+     */
+    private function reglaPartnerLogistico(): \Illuminate\Validation\Rules\Exists
+    {
+        return Rule::exists('partners', 'id')->where(
+            fn ($query) => $query->where('tipo_socio', 'logistico')->where('activo', true),
+        );
     }
 
     private function mensajeResumen(OrdenServicio $orden, bool $created): string

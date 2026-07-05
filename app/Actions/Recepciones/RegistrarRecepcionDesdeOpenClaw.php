@@ -6,6 +6,7 @@ use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cliente;
 use App\Models\Equipo;
 use App\Models\OrdenServicio;
+use App\Models\Partner;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -50,12 +51,19 @@ class RegistrarRecepcionDesdeOpenClaw
 
             $cliente = $this->resolverCliente($data);
             $equipo = $this->crearEquipo($data, $cliente);
-            [$notas, $warnings] = $this->componerNotas($data);
+            $partner = $this->resolverPartnerLogistico($data);
+            [$notas, $warnings] = $this->componerNotas($data, $partner['texto']);
+
+            if ($partner['warning'] !== null) {
+                $warnings[] = $partner['warning'];
+            }
 
             $orden = $this->crearOrden->ejecutar(
                 [
                     'cliente_id' => $cliente->id,
                     'equipo_id' => $equipo->id,
+                    // El partner resuelto (o null) lo revalida CrearOrdenServicio::prepararAsignaciones.
+                    'partner_recepcion_id' => $partner['id'],
                     'tipo_recepcion' => $data['tipo_recepcion'] ?? 'directo',
                     'notas' => $notas,
                     'costo_tecnico' => 0,
@@ -130,6 +138,111 @@ class RegistrarRecepcionDesdeOpenClaw
         ]);
     }
 
+    /**
+     * Resolves the logistics partner (branch) detected on the label. Order of
+     * preference: explicit partner_recepcion_id (already validated as an active
+     * logistics partner by the controller), then a case/accent-insensitive name
+     * match tolerant to variants ("Alameda" → "Electrocom Alameda"). A miss or an
+     * ambiguous match never fails the reception: it returns a warning and the
+     * detected text so it can be kept in the notes.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{id: int|null, warning: string|null, texto: string|null}
+     */
+    private function resolverPartnerLogistico(array $data): array
+    {
+        $recepcion = $data['recepcion'] ?? [];
+
+        $explicitId = $data['partner_recepcion_id'] ?? ($recepcion['partner_recepcion_id'] ?? null);
+        if (! empty($explicitId)) {
+            return ['id' => (int) $explicitId, 'warning' => null, 'texto' => null];
+        }
+
+        $texto = $this->primerTextoLleno([
+            $recepcion['partner_logistico'] ?? null,
+            $recepcion['partner_logistico_nombre'] ?? null,
+            $recepcion['sucursal_nombre'] ?? null,
+            $data['partner_logistico'] ?? null,
+        ]);
+
+        if ($texto === null) {
+            return ['id' => null, 'warning' => null, 'texto' => null];
+        }
+
+        $match = $this->buscarPartnerPorNombre($texto);
+
+        if ($match instanceof Partner) {
+            return ['id' => $match->id, 'warning' => null, 'texto' => $texto];
+        }
+
+        $warning = $match === 'ambiguo'
+            ? "La sucursal \"{$texto}\" coincide con más de un partner logístico; asígnalo manualmente en el panel."
+            : "No se encontró un partner logístico que coincida con \"{$texto}\"; la orden quedó sin partner. Asígnalo en el panel.";
+
+        return ['id' => null, 'warning' => $warning, 'texto' => $texto];
+    }
+
+    /**
+     * @return Partner|string|null  Partner if unique match; 'ambiguo' if several; null if none.
+     */
+    private function buscarPartnerPorNombre(string $texto): Partner|string|null
+    {
+        $objetivo = $this->normalizarNombre($texto);
+        if ($objetivo === '') {
+            return null;
+        }
+
+        $partners = Partner::query()
+            ->where('tipo_socio', 'logistico')
+            ->where('activo', true)
+            ->get();
+
+        // 1. Coincidencia exacta (normalizada).
+        $exactos = $partners->filter(
+            fn (Partner $partner): bool => $this->normalizarNombre($partner->nombre) === $objetivo,
+        )->values();
+        if ($exactos->count() === 1) {
+            return $exactos->first();
+        }
+        if ($exactos->count() > 1) {
+            return 'ambiguo';
+        }
+
+        // 2. Coincidencia parcial en cualquier dirección ("Alameda" ⊂ "Electrocom Alameda").
+        $parciales = $partners->filter(function (Partner $partner) use ($objetivo): bool {
+            $nombre = $this->normalizarNombre($partner->nombre);
+
+            return $nombre !== '' && (str_contains($nombre, $objetivo) || str_contains($objetivo, $nombre));
+        })->values();
+        if ($parciales->count() === 1) {
+            return $parciales->first();
+        }
+        if ($parciales->count() > 1) {
+            return 'ambiguo';
+        }
+
+        return null;
+    }
+
+    private function normalizarNombre(string $texto): string
+    {
+        return Str::of($texto)->ascii()->lower()->squish()->value();
+    }
+
+    /**
+     * @param  array<int, mixed>  $valores
+     */
+    private function primerTextoLleno(array $valores): ?string
+    {
+        foreach ($valores as $valor) {
+            if (is_string($valor) && trim($valor) !== '') {
+                return trim($valor);
+            }
+        }
+
+        return null;
+    }
+
     private function normalizarTelefono(?string $telefono): ?string
     {
         if (blank($telefono)) {
@@ -146,9 +259,10 @@ class RegistrarRecepcionDesdeOpenClaw
      * warnings. Suggested services/parts are kept as text (not billable rows).
      *
      * @param  array<string, mixed>  $data
+     * @param  string|null  $sucursalTexto  Texto de sucursal/partner detectado en la etiqueta.
      * @return array{0: string, 1: array<int, string>}
      */
-    private function componerNotas(array $data): array
+    private function componerNotas(array $data, ?string $sucursalTexto = null): array
     {
         $warnings = [];
         $recepcion = $data['recepcion'] ?? [];
@@ -171,6 +285,9 @@ class RegistrarRecepcionDesdeOpenClaw
         }
         if (filled($recepcion['origen'] ?? null)) {
             $meta[] = "Origen: {$recepcion['origen']}";
+        }
+        if ($sucursalTexto !== null) {
+            $meta[] = "Sucursal/partner detectado: {$sucursalTexto}";
         }
         if ($meta !== []) {
             $bloques[] = "Datos de etiqueta:\n".implode("\n", $meta);
