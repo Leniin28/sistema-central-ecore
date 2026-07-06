@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\InternalFollowUpController;
 use App\Http\Controllers\Api\InternalQuoteController;
 use App\Http\Controllers\Api\InternalReceptionController;
+use App\Http\Controllers\Api\InternalReportController;
 use App\Http\Controllers\Api\InternalSearchController;
 use App\Http\Controllers\Api\InternalServiceOrderController;
 use Illuminate\Support\Facades\Route;
@@ -31,4 +33,11 @@ Route::middleware(['internal.api', 'throttle:30,1'])->prefix('internal')->name('
 
     // Búsqueda unificada de clientes/órdenes/cotizaciones.
     Route::get('search', InternalSearchController::class)->name('search');
+
+    // Reportes operativos.
+    Route::get('reports/daily', [InternalReportController::class, 'daily'])->name('reports.daily');
+    Route::get('reports/weekly', [InternalReportController::class, 'weekly'])->name('reports.weekly');
+
+    // Pendientes/atrasos para seguimiento (OpenClaw decide cuándo consultarlos).
+    Route::get('follow-ups', InternalFollowUpController::class)->name('follow-ups');
 });
