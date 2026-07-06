@@ -7,6 +7,7 @@ use App\Actions\Cotizaciones\CrearCotizacion;
 use App\Http\Controllers\Controller;
 use App\Models\Cotizacion;
 use App\Models\CotizacionItem;
+use App\Models\OrdenServicio;
 use App\Services\ExportarCotizacionPdf;
 use App\Services\ExportarCotizacionPng;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class InternalQuoteController extends Controller
 {
@@ -167,14 +169,18 @@ class InternalQuoteController extends Controller
     }
 
     /**
-     * Convert an accepted quote into a service order (OpenClaw). Idempotent by
-     * external_id; unresolved service items become warnings/notes, never fake
-     * catalog lines.
+     * Convert an accepted quote into a service order (OpenClaw). Hardened: an
+     * empty or incomplete POST must never create an order nor touch the quote.
+     * All checks below are read-only and run BEFORE the action's transaction.
+     * Idempotent by external_id; unresolved service items become
+     * warnings/notes, never fake catalog lines.
      */
     public function convertToOrder(Request $request, Cotizacion $cotizacion, ConvertirCotizacionEnOrden $accion): JsonResponse
     {
         $data = $request->validate([
-            'external_id' => ['nullable', 'string', 'max:255'],
+            // Obligatorio: sin external_id no hay idempotencia y un reintento
+            // de Telegram duplicaría la orden. También corta el body vacío.
+            'external_id' => ['required', 'string', 'max:255'],
             'partner_recepcion_id' => [
                 'nullable', 'integer',
                 Rule::exists('partners', 'id')->where(
@@ -183,9 +189,10 @@ class InternalQuoteController extends Controller
             ],
             'partner_logistico' => ['nullable', 'string', 'max:255'],
 
-            'recepcion' => ['nullable', 'array'],
-            'recepcion.falla_reportada' => ['nullable', 'string', 'max:3000'],
-            'recepcion.notas' => ['nullable', 'string', 'max:3000'],
+            // Contexto mínimo de recepción: falla reportada o al menos notas.
+            'recepcion' => ['required', 'array'],
+            'recepcion.falla_reportada' => ['nullable', 'required_without:recepcion.notas', 'string', 'max:3000'],
+            'recepcion.notas' => ['nullable', 'required_without:recepcion.falla_reportada', 'string', 'max:3000'],
 
             'equipo' => ['nullable', 'array'],
             'equipo.tipo_equipo' => ['nullable', 'string', 'max:100'],
@@ -195,27 +202,88 @@ class InternalQuoteController extends Controller
             'equipo.password_equipo' => ['nullable', 'string', 'max:150'],
         ]);
 
-        $resultado = $accion->ejecutar($cotizacion, $data);
+        // Equipo mínimo: el de la cotización o uno identificable en el payload.
+        if (! $cotizacion->equipo_id
+            && blank($data['equipo']['tipo_equipo'] ?? null)
+            && blank($data['equipo']['modelo'] ?? null)) {
+            throw ValidationException::withMessages([
+                'equipo.tipo_equipo' => 'La cotización no tiene equipo: envía equipo.tipo_equipo o equipo.modelo para poder crear la orden.',
+            ]);
+        }
 
-        $orden = $resultado['orden'];
+        // Idempotencia primero: un reintento del mismo external_id devuelve la
+        // orden ya creada aunque la cotización haya cambiado de estado después.
+        $existente = OrdenServicio::query()->where('external_id', $data['external_id'])->first();
+        if ($existente) {
+            return $this->respuestaConversion($cotizacion, $existente, created: false, warnings: []);
+        }
+
+        // Solo se convierten cotizaciones vivas. Cualquier otro estado —incluido
+        // un valor fuera de catálogo como "cancelada"— se rechaza sin efectos.
+        if (! in_array($cotizacion->estado, ['borrador', 'enviada', 'aceptada'], true)) {
+            Log::warning('API interna: conversión rechazada por estado de la cotización.', [
+                'cotizacion_id' => $cotizacion->id,
+                'folio' => $cotizacion->folio,
+                'estado' => $cotizacion->estado,
+            ]);
+
+            return response()->json([
+                'message' => $cotizacion->estado === 'cancelada'
+                    ? "La cotización {$cotizacion->folio} está cancelada y no puede convertirse en orden."
+                    : "La cotización {$cotizacion->folio} está \"{$cotizacion->estado}\" y no puede convertirse en orden.",
+                'folio' => $cotizacion->folio,
+                'estado' => $cotizacion->estado,
+            ], 409);
+        }
+
+        // Ya convertida antes (aunque el external_id sea otro): no duplicar.
+        $convertida = OrdenServicio::query()
+            ->where('origen', 'openclaw-cotizacion')
+            ->where('notas', 'like', "%la cotización {$cotizacion->folio}%")
+            ->first();
+        if ($convertida) {
+            return $this->respuestaConversion($cotizacion, $convertida, created: false, warnings: [
+                "La cotización {$cotizacion->folio} ya fue convertida en la orden {$convertida->folio}; no se creó otra.",
+            ]);
+        }
+
+        $resultado = $accion->ejecutar($cotizacion, $data);
 
         Log::info('API interna: cotización convertida en orden.', [
             'cotizacion_id' => $resultado['cotizacion']->id,
-            'orden_id' => $orden->id,
-            'folio' => $orden->folio,
+            'orden_id' => $resultado['orden']->id,
+            'folio' => $resultado['orden']->folio,
             'created' => $resultado['created'],
         ]);
 
+        return $this->respuestaConversion(
+            $resultado['cotizacion'],
+            $resultado['orden'],
+            created: $resultado['created'],
+            warnings: $resultado['warnings'],
+        );
+    }
+
+    /**
+     * Shared response shape for a conversion (new order or idempotent replay).
+     * Never includes password_equipo.
+     *
+     * @param  array<int, string>  $warnings
+     */
+    private function respuestaConversion(Cotizacion $cotizacion, OrdenServicio $orden, bool $created, array $warnings): JsonResponse
+    {
+        $orden->loadMissing(['cliente', 'equipo', 'partnerRecepcion']);
+
         return response()->json([
-            'created' => $resultado['created'],
+            'created' => $created,
             'id' => $orden->id,
             'folio' => $orden->folio,
             'estado' => $orden->estado,
             'external_id' => $orden->external_id,
             'cotizacion' => [
-                'id' => $resultado['cotizacion']->id,
-                'folio' => $resultado['cotizacion']->folio,
-                'estado' => $resultado['cotizacion']->estado,
+                'id' => $cotizacion->id,
+                'folio' => $cotizacion->folio,
+                'estado' => $cotizacion->estado,
             ],
             'cliente' => [
                 'id' => $orden->cliente?->id,
@@ -230,9 +298,9 @@ class InternalQuoteController extends Controller
             ] : null,
             'partner_recepcion' => $orden->partnerRecepcion?->nombre,
             'total_cliente' => (float) $orden->total_cliente,
-            'warnings' => $resultado['warnings'],
+            'warnings' => $warnings,
             'show_url' => route('admin.ordenes-servicio.show', $orden),
-        ], $resultado['created'] ? 201 : 200);
+        ], $created ? 201 : 200);
     }
 
     /**

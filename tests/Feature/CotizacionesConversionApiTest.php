@@ -52,6 +52,7 @@ test('convierte una cotización en orden con servicios del catálogo y refaccion
         ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
             'external_id' => 'telegram-quote-convert-1',
             'partner_logistico' => 'Alameda',
+            'recepcion' => ['falla_reportada' => 'Servicio autorizado desde cotización'],
             'equipo' => ['tipo_equipo' => 'Laptop', 'marca' => 'Lenovo', 'modelo' => 'ThinkPad T490'],
         ]);
 
@@ -76,7 +77,11 @@ test('la conversión es idempotente con external_id y no duplica órdenes', func
     servicioCatalogoConversion();
     $cotizacion = cotizacionParaConvertir();
 
-    $payload = ['external_id' => 'telegram-quote-convert-dup'];
+    $payload = [
+        'external_id' => 'telegram-quote-convert-dup',
+        'recepcion' => ['falla_reportada' => 'Servicio autorizado desde cotización'],
+        'equipo' => ['tipo_equipo' => 'Laptop'],
+    ];
 
     $primera = $this->withToken('token-secreto-pruebas')
         ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", $payload);
@@ -99,6 +104,8 @@ test('items de servicio sin match del catálogo generan warning y no líneas fal
     $response = $this->withToken('token-secreto-pruebas')
         ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
             'external_id' => 'telegram-quote-convert-nomatch',
+            'recepcion' => ['falla_reportada' => 'Servicio autorizado desde cotización'],
+            'equipo' => ['tipo_equipo' => 'Laptop'],
         ]);
 
     $response->assertCreated();
@@ -110,16 +117,124 @@ test('items de servicio sin match del catálogo generan warning y no líneas fal
         ->and($orden->notas)->toContain('Reparación imposible de clasificar');
 });
 
-test('la cotización sin equipo genera warning si no se envía equipo', function () {
+test('un POST vacío devuelve 422 y no crea orden ni cambia la cotización', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
     servicioCatalogoConversion();
     $cotizacion = cotizacionParaConvertir();
 
-    $response = $this->withToken('token-secreto-pruebas')
-        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", []);
+    $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['external_id', 'recepcion']);
 
-    $response->assertCreated();
-    expect(collect($response->json('warnings'))->contains(fn ($w) => str_contains($w, 'sin equipo')))->toBeTrue();
+    expect(OrdenServicio::count())->toBe(0)
+        ->and($cotizacion->fresh()->estado)->toBe('enviada')
+        ->and($cotizacion->fresh()->notas)->toBeNull();
+});
+
+test('sin external_id devuelve 422 y no crea orden', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cotizacion = cotizacionParaConvertir();
+
+    $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
+            'recepcion' => ['falla_reportada' => 'Autorizado'],
+            'equipo' => ['tipo_equipo' => 'Laptop'],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['external_id']);
+
+    expect(OrdenServicio::count())->toBe(0);
+});
+
+test('la cotización sin equipo y payload sin equipo suficiente devuelve 422', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    servicioCatalogoConversion();
+    $cotizacion = cotizacionParaConvertir();
+
+    $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
+            'external_id' => 'telegram-quote-convert-sin-equipo',
+            'recepcion' => ['falla_reportada' => 'Autorizado'],
+            'equipo' => ['marca' => 'Lenovo'],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['equipo.tipo_equipo']);
+
+    expect(OrdenServicio::count())->toBe(0)
+        ->and($cotizacion->fresh()->estado)->toBe('enviada');
+});
+
+test('una cotización cancelada devuelve 409 y no crea orden', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cotizacion = cotizacionParaConvertir();
+    $cotizacion->update(['estado' => 'cancelada']);
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
+            'external_id' => 'telegram-quote-convert-cancelada',
+            'recepcion' => ['falla_reportada' => 'Autorizado'],
+            'equipo' => ['tipo_equipo' => 'Laptop'],
+        ]);
+
+    $response->assertStatus(409);
+    expect($response->json('message'))->toContain('cancelada')
+        ->and(OrdenServicio::count())->toBe(0)
+        ->and($cotizacion->fresh()->estado)->toBe('cancelada');
+});
+
+test('una cotización rechazada o vencida devuelve 409 y no crea orden', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cotizacion = cotizacionParaConvertir();
+    $cotizacion->update(['estado' => 'rechazada']);
+
+    $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
+            'external_id' => 'telegram-quote-convert-rechazada',
+            'recepcion' => ['falla_reportada' => 'Autorizado'],
+            'equipo' => ['tipo_equipo' => 'Laptop'],
+        ])
+        ->assertStatus(409);
+
+    expect(OrdenServicio::count())->toBe(0);
+});
+
+test('una cotización ya convertida no se duplica aunque cambie el external_id', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    servicioCatalogoConversion();
+    $cotizacion = cotizacionParaConvertir();
+
+    $base = [
+        'recepcion' => ['falla_reportada' => 'Autorizado'],
+        'equipo' => ['tipo_equipo' => 'Laptop'],
+    ];
+
+    $primera = $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", $base + ['external_id' => 'telegram-quote-convert-a']);
+    $segunda = $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", $base + ['external_id' => 'telegram-quote-convert-b']);
+
+    $primera->assertCreated();
+    $segunda->assertOk()->assertJsonPath('created', false);
+
+    expect(OrdenServicio::count())->toBe(1)
+        ->and($segunda->json('id'))->toBe($primera->json('id'))
+        ->and(collect($segunda->json('warnings'))->contains(fn ($w) => str_contains($w, 'ya fue convertida')))->toBeTrue();
+});
+
+test('la conversión nunca expone password_equipo', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cotizacion = cotizacionParaConvertir();
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
+            'external_id' => 'telegram-quote-convert-pass',
+            'recepcion' => ['falla_reportada' => 'Autorizado'],
+            'equipo' => ['tipo_equipo' => 'Laptop', 'password_equipo' => 'SECRETO-CONV-77'],
+        ]);
+
+    $response->assertCreated()->assertJsonPath('equipo.password_registrada', true);
+    expect($response->getContent())->not->toContain('SECRETO-CONV-77');
 });
 
 test('lista cotizaciones pendientes con enlaces de pdf/png y días pendientes', function () {
