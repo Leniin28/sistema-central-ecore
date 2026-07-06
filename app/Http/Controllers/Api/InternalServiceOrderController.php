@@ -9,6 +9,7 @@ use App\Exceptions\ConfirmacionEntregaRequeridaException;
 use App\Exceptions\OrdenBloqueadaException;
 use App\Http\Controllers\Controller;
 use App\Models\OrdenServicio;
+use App\Services\GenerarMensajeCliente;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -288,6 +289,36 @@ class InternalServiceOrderController extends Controller
             'finanzas_generadas' => (bool) $ordenActual->finanzas_generadas,
             'fecha_entrega' => $ordenActual->fecha_entrega?->toIso8601String(),
             'show_url' => route('admin.ordenes-servicio.show', $ordenActual),
+            'warnings' => $resultado['warnings'],
+        ]);
+    }
+
+    /**
+     * Generate a ready-to-send client message for an order (status template or
+     * manual instruction). ECore only renders text with real data; OpenClaw
+     * decides when/how to send it. Nothing is sent from here.
+     */
+    public function messageTemplate(Request $request, string $orden, GenerarMensajeCliente $generador): JsonResponse
+    {
+        $ordenServicio = $this->resolverOrden($orden);
+        abort_if($ordenServicio === null, 404, 'Orden de servicio no encontrada.');
+
+        $data = $request->validate([
+            'tipo' => ['required', Rule::in(['estado', 'manual'])],
+            'estado' => ['nullable', Rule::in(OrdenServicio::ESTADOS)],
+            'tono' => ['nullable', Rule::in(GenerarMensajeCliente::TONOS)],
+            'incluir_total' => ['nullable', 'boolean'],
+            'incluir_sucursal' => ['nullable', 'boolean'],
+            'instruccion' => ['nullable', 'required_if:tipo,manual', 'string', 'max:1000'],
+        ]);
+
+        $resultado = $generador->ejecutar($ordenServicio, $data);
+
+        return response()->json([
+            'id' => $ordenServicio->id,
+            'folio' => $ordenServicio->folio,
+            'estado' => $ordenServicio->estado,
+            'message' => $resultado['message'],
             'warnings' => $resultado['warnings'],
         ]);
     }

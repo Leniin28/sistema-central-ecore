@@ -31,6 +31,10 @@ Route::middleware(['internal.api', 'throttle:30,1'])->prefix('internal')->name('
     Route::post('service-orders/{orden}/status', [InternalServiceOrderController::class, 'status'])
         ->name('service-orders.status');
 
+    // Generar texto de mensaje para el cliente (no envía nada).
+    Route::post('service-orders/{orden}/message-template', [InternalServiceOrderController::class, 'messageTemplate'])
+        ->name('service-orders.message-template');
+
     // Búsqueda unificada de clientes/órdenes/cotizaciones.
     Route::get('search', InternalSearchController::class)->name('search');
 
