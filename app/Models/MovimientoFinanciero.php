@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'monto',
     'descripcion',
     'fecha',
+    'external_id',
 ])]
 class MovimientoFinanciero extends Model
 {

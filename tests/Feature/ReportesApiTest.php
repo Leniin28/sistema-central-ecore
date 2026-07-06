@@ -4,6 +4,7 @@ use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cliente;
 use App\Models\Cotizacion;
 use App\Models\Equipo;
+use App\Models\MovimientoFinanciero;
 use App\Models\OrdenServicio;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -78,8 +79,56 @@ test('el resumen semanal acumula el rango de la semana', function () {
         ->assertJsonPath('ordenes.creadas', 1);
 });
 
+test('el corte diario reporta ingresos y egresos reales y pendiente estimado', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+
+    $ordenLista = crearOrdenReporte();
+    $ordenLista->update(['estado' => 'listo_para_entregar', 'total_cliente' => 750]);
+
+    $ordenEntregada = crearOrdenReporte();
+    $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/service-orders/{$ordenEntregada->folio}/changes", [
+            'refacciones' => [['descripcion' => 'Pantalla', 'costo_unitario' => 300, 'precio_cliente' => 600]],
+        ])->assertOk();
+    $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/service-orders/{$ordenEntregada->folio}/status", [
+            'estado' => 'entregado', 'confirm_final_delivery' => true,
+        ])->assertOk();
+
+    MovimientoFinanciero::create([
+        'tipo' => 'egreso', 'categoria' => 'gasolina', 'monto' => 100,
+        'descripcion' => 'Gasolina', 'fecha' => today(),
+    ]);
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->getJson('/api/internal/reports/cash-cut?period=daily&include_details=true');
+
+    $response->assertOk()
+        ->assertJsonPath('period', 'daily')
+        ->assertJsonPath('ingresos', 600)
+        ->assertJsonPath('egresos', 400)
+        ->assertJsonPath('utilidad', 200)
+        ->assertJsonPath('ordenes_entregadas', 1)
+        ->assertJsonPath('refacciones', 600)
+        ->assertJsonPath('pendiente_por_cobrar_estimado', 750);
+
+    expect($response->json('detalles'))->toHaveCount(3);
+});
+
+test('el corte semanal usa week_start', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $inicio = today()->startOfWeek()->toDateString();
+
+    $this->withToken('token-secreto-pruebas')
+        ->getJson("/api/internal/reports/cash-cut?period=weekly&week_start={$inicio}")
+        ->assertOk()
+        ->assertJsonPath('period', 'weekly')
+        ->assertJsonPath('from', $inicio);
+});
+
 test('los reportes exigen token', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
 
     $this->getJson('/api/internal/reports/daily')->assertUnauthorized();
+    $this->getJson('/api/internal/reports/cash-cut')->assertUnauthorized();
 });

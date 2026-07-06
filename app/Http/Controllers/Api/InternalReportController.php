@@ -51,6 +51,82 @@ class InternalReportController extends Controller
     }
 
     /**
+     * Cash cut (daily or weekly): real income/expense from financial movements,
+     * delivered orders in the period, and the estimated amount still to collect.
+     */
+    public function cashCut(Request $request): JsonResponse
+    {
+        $filtros = $this->validarFiltros($request, [
+            'period' => ['nullable', Rule::in(['daily', 'weekly'])],
+            'date' => ['nullable', 'date'],
+            'week_start' => ['nullable', 'date'],
+        ]);
+
+        $periodo = $filtros['period'] ?? 'daily';
+        if ($periodo === 'weekly') {
+            $desde = CarbonImmutable::parse($filtros['week_start'] ?? today()->startOfWeek()->toDateString());
+            $hasta = $desde->addDays(6);
+        } else {
+            $desde = CarbonImmutable::parse($filtros['date'] ?? today()->toDateString());
+            $hasta = $desde;
+        }
+
+        $warnings = [];
+        $partnerId = $this->resolverPartner($filtros, $warnings);
+
+        $movimientos = MovimientoFinanciero::query()
+            ->whereDate('fecha', '>=', $desde->toDateString())
+            ->whereDate('fecha', '<=', $hasta->toDateString())
+            ->when($partnerId, fn (Builder $query, int $id) => $query->where('partner_id', $id))
+            ->orderBy('fecha')
+            ->get();
+
+        $ingresos = (float) $movimientos->where('tipo', 'ingreso')->sum('monto');
+        $egresos = (float) $movimientos->where('tipo', 'egreso')->sum('monto');
+
+        $entregadas = $this->ordenesBase($partnerId)
+            ->where('estado', 'entregado')
+            ->whereDate('fecha_entrega', '>=', $desde->toDateString())
+            ->whereDate('fecha_entrega', '<=', $hasta->toDateString())
+            ->with(['cliente', 'detalles', 'refacciones'])
+            ->get();
+
+        $pendientePorCobrar = (float) $this->ordenesBase($partnerId)
+            ->where('estado', 'listo_para_entregar')
+            ->sum('total_cliente');
+
+        $respuesta = [
+            'period' => $periodo,
+            'from' => $desde->toDateString(),
+            'to' => $hasta->toDateString(),
+            // Basado en movimientos financieros registrados: cifras reales.
+            'source' => 'movimientos_financieros (real)',
+            'ingresos' => $ingresos,
+            'egresos' => $egresos,
+            'utilidad' => round($ingresos - $egresos, 2),
+            'ordenes_entregadas' => $entregadas->count(),
+            'servicios' => (float) $entregadas->sum(fn (OrdenServicio $orden): float => (float) $orden->detalles->sum('subtotal')),
+            'refacciones' => (float) $entregadas->sum(fn (OrdenServicio $orden): float => (float) $orden->refacciones->sum('precio_total_cliente')),
+            'pendiente_por_cobrar_estimado' => $pendientePorCobrar,
+            'pendiente_por_cobrar_nota' => 'Estimado: suma de total_cliente de órdenes listas para entregar (aún sin finanzas).',
+            'warnings' => $warnings,
+        ];
+
+        if ($this->incluirDetalles($filtros)) {
+            $respuesta['detalles'] = $movimientos->map(fn (MovimientoFinanciero $movimiento): array => [
+                'fecha' => $movimiento->fecha?->toDateString(),
+                'tipo' => $movimiento->tipo,
+                'categoria' => $movimiento->categoria,
+                'monto' => (float) $movimiento->monto,
+                'descripcion' => $movimiento->descripcion,
+                'orden_servicio_id' => $movimiento->orden_servicio_id,
+            ])->values()->all();
+        }
+
+        return response()->json($respuesta);
+    }
+
+    /**
      * Shared aggregation for daily/weekly summaries over [desde, hasta].
      *
      * @param  array<string, mixed>  $filtros

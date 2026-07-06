@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\InternalExpenseController;
 use App\Http\Controllers\Api\InternalFollowUpController;
 use App\Http\Controllers\Api\InternalQuoteController;
 use App\Http\Controllers\Api\InternalReceptionController;
@@ -44,10 +45,15 @@ Route::middleware(['internal.api', 'throttle:30,1'])->prefix('internal')->name('
     // Búsqueda unificada de clientes/órdenes/cotizaciones.
     Route::get('search', InternalSearchController::class)->name('search');
 
-    // Reportes operativos.
+    // Reportes operativos y corte.
     Route::get('reports/daily', [InternalReportController::class, 'daily'])->name('reports.daily');
     Route::get('reports/weekly', [InternalReportController::class, 'weekly'])->name('reports.weekly');
+    Route::get('reports/cash-cut', [InternalReportController::class, 'cashCut'])->name('reports.cash-cut');
 
     // Pendientes/atrasos para seguimiento (OpenClaw decide cuándo consultarlos).
     Route::get('follow-ups', InternalFollowUpController::class)->name('follow-ups');
+
+    // Gastos operativos manuales (egresos sin orden asociada).
+    Route::post('expenses', [InternalExpenseController::class, 'store'])->name('expenses.store');
+    Route::get('expenses', [InternalExpenseController::class, 'index'])->name('expenses.index');
 });
