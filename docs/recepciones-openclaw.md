@@ -4,6 +4,12 @@ Permite que OpenClaw registre una **recepción/orden de servicio** a partir de l
 datos que un modelo de visión extrae de una **foto de etiqueta física** enviada por
 Telegram.
 
+> Si la visión leyó algo mal (cliente, teléfono, marca/modelo, falla, sucursal,
+> contraseña), corrígelo después con
+> `POST /api/internal/service-orders/{orden}/profile` — ver
+> `docs/ordenes-openclaw.md` §"Corregir datos base". La orden se puede consultar
+> completa con `GET /api/internal/service-orders/{orden}`.
+
 ## Ruta y seguridad
 
 | Ruta | Uso |

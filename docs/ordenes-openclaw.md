@@ -1,8 +1,11 @@
-# API interna: editar órdenes y cambiar estados desde OpenClaw
+# API interna: consultar y editar órdenes y cambiar estados desde OpenClaw
 
-Permite que OpenClaw, desde Telegram: (1) agregue **servicios y refacciones reales**
-(y notas) a una **orden existente**, y (2) **cambie el estado** de la orden,
-incluida la entrega final con confirmación explícita.
+Permite que OpenClaw, desde Telegram: (1) **consulte** una orden completa,
+(2) **corrija datos base** (cliente/equipo/recepción/partner), (3) agregue
+**servicios y refacciones reales** (y notas) a una **orden existente**,
+(4) **cambie el estado** de la orden, incluida la entrega final con confirmación
+explícita, y (5) genere **plantillas de mensaje** para el cliente (ver
+`docs/reportes-openclaw.md` §Mensajes).
 
 Comparte el motor con la recepción: las líneas usan la Action
 `App\Actions\Ordenes\AplicarCambiosOrdenDesdeOpenClaw`, que **agrega** líneas (no
@@ -16,8 +19,11 @@ del panel (`CalcularTotalesOrdenServicio`). Los estados usan
 
 | Ruta | Uso |
 |---|---|
+| `GET  /api/internal/service-orders/{orden}` | Consultar una orden completa (payload seguro) |
+| `POST /api/internal/service-orders/{orden}/profile` | Corregir datos base (cliente/equipo/recepción/partner) |
 | `POST /api/internal/service-orders/{orden}/changes` | Agregar servicios/refacciones/notas |
 | `POST /api/internal/service-orders/{orden}/status` | Cambiar el estado de la orden |
+| `POST /api/internal/service-orders/{orden}/message-template` | Generar texto de mensaje para el cliente |
 
 - `{orden}` acepta **id numérico** o **folio** (`OS-20260705-0004`).
 - Middleware `internal.api` (Bearer Token) + `throttle:30,1`, igual que cotizaciones
@@ -28,6 +34,88 @@ del panel (`CalcularTotalesOrdenServicio`). Los estados usan
 - No expone `password_equipo` en ninguna respuesta.
 - Auditoría: el historial de estados se registra con el **usuario de sistema
   OpenClaw** (`OPENCLAW_SYSTEM_USER_EMAIL`), igual que la creación de recepciones.
+
+## Consultar una orden
+
+`GET /api/internal/service-orders/{orden}` (`{orden}` = id o folio).
+
+```json
+{
+  "id": 5,
+  "folio": "OS-20260705-0004",
+  "external_id": "telegram-msg-981",
+  "origen": "openclaw",
+  "cliente": { "id": 1, "nombre": "Román Barrera", "telefono": "4491112233" },
+  "equipo": {
+    "id": 2, "tipo": "Laptop", "marca": "Lenovo", "modelo": "ThinkPad T490",
+    "numero_serie": null, "password_registrada": true
+  },
+  "estado": "en_proceso",
+  "estado_label": "En proceso",
+  "partner_recepcion": "Electrocom Alameda",
+  "partner_tecnico": null,
+  "tipo_recepcion": "sucursal",
+  "falla_reportada": "Marco dañado",
+  "notas": "Falla reportada:\n...",
+  "servicios": [ { "servicio_id": 1, "nombre": "Optimización", "cantidad": 1, "precio_unitario": 550.0, "subtotal": 550.0, "notas": null } ],
+  "refacciones": [ { "descripcion": "USB 16GB", "cantidad": 1, "costo_unitario": 50.0, "precio_unitario_cliente": 80.0, "precio_total_cliente": 80.0, "notas": null } ],
+  "total_cliente": 630.0,
+  "costo_tecnico": 0.0,
+  "finanzas_generadas": false,
+  "fecha_recepcion": "2026-07-05T10:00:00-06:00",
+  "fecha_entrega": null,
+  "show_url": "http://sistema-central-ecore.test/admin/ordenes-servicio/5"
+}
+```
+
+- **Nunca** devuelve `password_equipo`; solo `password_registrada` (booleano).
+- `falla_reportada` se extrae de las notas (la orden no tiene columna dedicada);
+  una corrección posterior vía `/profile` gana sobre el valor original. Si no se
+  puede determinar, es `null`.
+
+## Corregir datos base — `/profile`
+
+`POST /api/internal/service-orders/{orden}/profile`. Pensado para corregir lo que
+la visión leyó mal de la etiqueta (antes o después de crear la orden).
+
+```json
+{
+  "cliente": { "nombre": "Pedro Medina", "telefono": "4499998877", "correo": null },
+  "equipo": {
+    "tipo_equipo": "Laptop", "marca": "Lenovo", "modelo": "ThinkPad T490",
+    "numero_serie": "PF-1TT", "password_equipo": "123456"
+  },
+  "recepcion": {
+    "falla_reportada": "Marco dañado", "notas": "Cliente trae cargador",
+    "folio_externo": "4946", "fecha_etiqueta": "2026-07-02"
+  },
+  "partner_logistico": "Electrocom Alameda",
+  "external_id": "telegram-correction-123"
+}
+```
+
+Reglas:
+
+- Todos los campos son opcionales: solo se aplica lo que venga **con valor**; lo
+  vacío/ausente no toca nada. Sin ningún cambio → `aplicado: false` + warning.
+- **Actualiza el cliente y el equipo relacionados en el lugar** (los mismos
+  registros que edita el panel): no crea clientes/equipos duplicados.
+- `password_equipo` se guarda pero **jamás** se devuelve ni se escribe en notas;
+  la respuesta solo trae `password_registrada: true`.
+- `partner_logistico` usa el mismo match tolerante de recepciones (exacto →
+  parcial, sin acentos). Sin match o ambiguo → `warning`, la orden conserva su
+  partner. También se acepta `partner_recepcion_id` explícito (validado como
+  logístico activo).
+- `falla_reportada` / `folio_externo` / `fecha_etiqueta` / `recepcion.notas` se
+  agregan a las notas como corrección (la orden no tiene columnas dedicadas).
+- Deja **nota de auditoría** "Corrección vía OpenClaw (Telegram): ..." con los
+  campos corregidos (nunca valores de contraseña).
+- Idempotencia con `external_id` (mismo ledger `openclaw_order_changes`):
+  reenviar → `aplicado: false`, `duplicado: true`.
+- Orden con finanzas cerradas → `409`. **No toca** líneas, totales ni finanzas.
+
+Respuesta: `aplicado`, `duplicado`, datos actuales de cliente/equipo/partner,
+`cambios_aplicados[]`, `warnings[]`, `show_url`.
 
 ## Agregar servicios/refacciones — payload
 
