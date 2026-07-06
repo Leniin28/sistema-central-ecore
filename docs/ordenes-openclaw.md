@@ -279,11 +279,26 @@ curl -X POST http://sistema-central-ecore.test/api/internal/service-orders/OS-20
   --data '{"estado":"entregado","notas":"Entrega confirmada por Telegram","external_id":"telegram-status-124","confirm_final_delivery":true}'
 ```
 
-## Limitaciones del auto-match de servicios
+## Match de servicios contra el catálogo dinámico
 
-- Solo empata contra servicios de catálogo **activos**, por nombre normalizado
-  (mayúsculas/acentos/espacios). Match exacto y luego parcial bidireccional.
-- **No adivina:** nombres ambiguos (varios servicios contienen el texto, p. ej.
-  `"optimización"` si hay varias variantes) o sin match → `warning`, sin línea. En ese
-  caso usa `servicio_id` explícito o agrega el servicio en el panel.
-- No se crean servicios de catálogo nuevos desde la API (por diseño).
+El catálogo vive en el panel de ECore (crear/editar/desactivar). Comportamiento
+exacto de `/changes` (y de recepciones y conversión de cotizaciones, que usan la
+misma Action):
+
+- **`servicio_id` válido y activo** → se usa ese servicio, siempre.
+- **`servicio_id` inexistente o desactivado** → warning, **sin línea** (no se
+  factura contra un servicio que ya no existe).
+- **`descripcion` sin `servicio_id`** → match contra el catálogo **activo
+  actual** (compartido con `POST /api/internal/services/match`): exacto
+  normalizado (mayúsculas/acentos/espacios) y luego parcial bidireccional.
+- **Ambigüedad o sin match** (incluye servicios eliminados/desactivados) →
+  `warning` + nota, **nunca una línea falsa**.
+- **Precio**: si OpenClaw manda `precio_cliente` (o `precio`), se respeta; si
+  no, se usa el **`precio_base` actual** del catálogo (si el panel cambió el
+  precio, aplica el nuevo).
+- No se crean servicios de catálogo desde la API (por diseño).
+
+> Para elegir bien el servicio antes de llamar `/changes`, OpenClaw debe
+> consultar `GET /api/internal/services` o `POST /api/internal/services/match`
+> (ver `docs/openclaw-operativo.md` §"Catálogo dinámico de servicios") y
+> preferir `servicio_id` cuando el match sea claro.

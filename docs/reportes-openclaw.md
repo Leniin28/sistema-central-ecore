@@ -16,6 +16,10 @@ decide cuándo consultar y cómo redactar (no hay timers en ECore).
 | `POST /api/internal/expenses` | Registrar gasto operativo |
 | `GET /api/internal/expenses` | Consultar gastos operativos |
 
+> Para consultar el **catálogo de servicios** (y hacer match de texto libre),
+> ver `docs/openclaw-operativo.md` §"Catálogo dinámico de servicios":
+> `GET /api/internal/services` y `POST /api/internal/services/match`.
+
 ## Búsqueda — `GET /search`
 
 Query params: `q` (nombre, teléfono, folio, equipo, sucursal), `type`

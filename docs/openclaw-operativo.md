@@ -51,6 +51,13 @@ natural, decidir cuándo consultar/enviar).
 | `GET  /quotes/{cotizacion}/pdf` · `/png` | Documentos con el mismo token |
 | `POST /quotes/{cotizacion}/convert-to-order` | Cotización aceptada → orden |
 
+**Catálogo de servicios** (ver sección al final de este documento):
+
+| Ruta | Uso |
+|---|---|
+| `GET /services` | Servicios del catálogo (activos por default) |
+| `POST /services/match` | Match asesor de texto libre contra el catálogo |
+
 **Consulta, reportes y finanzas** (detalle en `docs/reportes-openclaw.md`):
 
 | Ruta | Uso |
@@ -82,3 +89,100 @@ Telegram (`telegram-<tipo>-<message_id>`), y reusar el mismo en reintentos.
   **estimado** de órdenes listas sin entregar y siempre viene etiquetado así.
 - Cotizaciones "aprobadas hoy" es aproximado (no hay timestamp de cambio de
   estado); el campo lleva su nota.
+
+## Catálogo dinámico de servicios para OpenClaw
+
+Los servicios se crean, editan y desactivan desde el panel de ECore. **OpenClaw
+no debe hardcodear el catálogo**: debe consultarlo antes de decidir qué servicio
+agregar a una orden o cotización (cuando el usuario diga "optimización",
+"bisagras", "reemplazo de disco", etc.). Ninguno de estos endpoints crea ni
+modifica servicios.
+
+### `GET /api/internal/services`
+
+Query params: `q=` (búsqueda tolerante a acentos/mayúsculas por nombre,
+descripción y categoría), `active=true|false` (default `true`), `category=`,
+`limit=` (default 50, máx 100).
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "nombre": "Servicio de Optimización",
+      "descripcion": null,
+      "categoria": "General",
+      "precio_base": 550.0,
+      "activo": true,
+      "aliases": ["servicio de optimización", "servicio de optimizacion", "optimizacion", "general"]
+    }
+  ],
+  "total": 1,
+  "warnings": []
+}
+```
+
+- `aliases` son variantes derivadas del nombre/categoría (no hay columna de
+  aliases en BD): sirven para matching coloquial del lado de OpenClaw.
+- `precio_base` es el precio actual del panel: si OpenClaw no manda precio en
+  `/changes`, este es el que se usa.
+- `q` sin coincidencias → lista vacía + warning (no elegir a ciegas).
+
+### `POST /api/internal/services/match`
+
+Match **asesor** de texto libre contra el catálogo activo, con la misma regla
+estricta que usa `/changes` (exacto → parcial) más un puntaje por palabras para
+frases largas.
+
+```json
+{ "text": "optimización completa limpieza pasta termica sistema optimizado", "limit": 5 }
+```
+
+```json
+{
+  "match": { "id": 2, "nombre": "Servicio de Optimización", "categoria": "General", "precio_base": 550.0, "confidence": "high" },
+  "confidence": "high",
+  "candidates": [ { "id": 2, "nombre": "Servicio de Optimización", "categoria": "General", "precio_base": 550.0, "score": 1.0 } ],
+  "warnings": []
+}
+```
+
+- `confidence: high` → OpenClaw puede enviar ese `servicio_id` directamente.
+- `confidence: ambiguous` → `match: null` + candidatos: **preguntar al usuario**,
+  nunca decidir automáticamente.
+- `confidence: none` → `match: null` + warning: el servicio no existe o está
+  desactivado; usar `servicios_sugeridos` o pedir aclaración.
+
+### Flujo recomendado para OpenClaw
+
+1. Consultar `GET /services` (o `POST /services/match` con la frase del
+   usuario) **en el momento**, no de una lista memorizada: el catálogo cambia.
+2. Con match claro (`high`), enviar **`servicio_id`** a `/changes`, recepciones
+   o al armar items de cotización (mejor que mandar solo la descripción).
+3. Sin match claro (`ambiguous`/`none`), mostrar candidatos y pedir aclaración
+   al usuario; como último recurso enviar `servicios_sugeridos` (queda como
+   nota, nunca como línea facturable).
+4. Nunca hardcodear el catálogo ni inventar servicios: la API no los crea.
+
+### Ejemplos
+
+```powershell
+$token = "TU_TOKEN"
+Invoke-RestMethod -Uri "http://sistema-central-ecore.test/api/internal/services?q=optimizacion" `
+  -Headers @{ Authorization = "Bearer $token"; Accept = "application/json" }
+
+$body = @'
+{ "text": "optimización completa con limpieza y pasta térmica" }
+'@
+Invoke-RestMethod -Method Post -Uri "http://sistema-central-ecore.test/api/internal/services/match" `
+  -Headers @{ Authorization = "Bearer $token"; Accept = "application/json" } `
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+```
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" "http://sistema-central-ecore.test/api/internal/services?q=optimizacion"
+curl -X POST http://sistema-central-ecore.test/api/internal/services/match \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json; charset=utf-8" \
+  --data '{"text":"optimización completa con limpieza y pasta térmica"}'
+```

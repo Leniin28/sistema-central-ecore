@@ -53,6 +53,21 @@ Params: `older_than_days=` (mínimo de días desde la fecha de la cotización),
 
 ## Convertir en orden — `POST /quotes/{cotizacion}/convert-to-order`
 
+**Payload mínimo obligatorio** (un POST vacío o incompleto responde `422` y no
+tiene NINGÚN efecto: ni orden, ni cambio de estado, ni notas):
+
+```json
+{
+  "external_id": "telegram-quote-convert-123",
+  "recepcion": {
+    "falla_reportada": "Servicio autorizado desde cotización"
+  },
+  "equipo": { "tipo_equipo": "Laptop" }
+}
+```
+
+Payload completo recomendado:
+
 ```json
 {
   "external_id": "telegram-quote-convert-123",
@@ -65,7 +80,25 @@ Params: `older_than_days=` (mínimo de días desde la fecha de la cotización),
 }
 ```
 
-Reglas:
+Validación dura (toda ANTES de la transacción, sin efectos secundarios):
+
+- **`external_id` es obligatorio** (`422` si falta): sin él no hay idempotencia
+  y un reintento duplicaría la orden.
+- **`recepcion` es obligatoria** con `falla_reportada` **o** `notas` (`422` si
+  faltan ambas).
+- **Equipo mínimo**: si la cotización no tiene equipo, el payload debe traer
+  `equipo.tipo_equipo` o `equipo.modelo` (`422` si no). Si la cotización ya
+  tiene equipo, el bloque `equipo` es opcional y se ignora a favor del suyo.
+- **Estados convertibles**: solo `borrador`, `enviada` o `aceptada`. Cualquier
+  otro estado —`rechazada`, `vencida` o un valor fuera de catálogo como
+  `cancelada`— responde **`409`** con mensaje claro ("La cotización COT-... está
+  cancelada y no puede convertirse en orden.") y **cero efectos**.
+- **Ya convertida**: si ya existe una orden creada desde esa cotización
+  (`origen: openclaw-cotizacion` + folio en notas), se devuelve esa orden con
+  `created: false` y un warning, aunque el `external_id` sea distinto. Nunca se
+  duplica.
+
+Reglas de la conversión válida:
 
 - Crea la orden con el flujo real (`CrearOrdenServicio` + usuario de sistema
   OpenClaw): folio nuevo, estado `recibido`, historial, transacción.
@@ -98,7 +131,8 @@ Respuesta: `created`, `id`, `folio`, `estado`, `cotizacion{id,folio,estado}`,
 $token = "TU_TOKEN"
 $body = @'
 { "external_id": "telegram-quote-convert-123", "partner_logistico": "Electrocom Alameda",
-  "recepcion": { "falla_reportada": "Servicio autorizado desde cotización" } }
+  "recepcion": { "falla_reportada": "Servicio autorizado desde cotización" },
+  "equipo": { "tipo_equipo": "Laptop" } }
 '@
 Invoke-RestMethod -Method Post `
   -Uri "http://sistema-central-ecore.test/api/internal/quotes/1/convert-to-order" `
