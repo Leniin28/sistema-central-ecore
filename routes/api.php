@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\InternalQuoteController;
 use App\Http\Controllers\Api\InternalReceptionController;
 use App\Http\Controllers\Api\InternalReportController;
 use App\Http\Controllers\Api\InternalSearchController;
+use App\Http\Controllers\Api\InternalServiceCatalogController;
 use App\Http\Controllers\Api\InternalServiceOrderController;
 use Illuminate\Support\Facades\Route;
 
@@ -41,6 +42,11 @@ Route::middleware(['internal.api', 'throttle:30,1'])->prefix('internal')->name('
     // Generar texto de mensaje para el cliente (no envía nada).
     Route::post('service-orders/{orden}/message-template', [InternalServiceOrderController::class, 'messageTemplate'])
         ->name('service-orders.message-template');
+
+    // Catálogo de servicios (solo lectura): OpenClaw consulta el estado actual
+    // en lugar de hardcodear servicios. match es asesor, nunca crea nada.
+    Route::get('services', [InternalServiceCatalogController::class, 'index'])->name('services.index');
+    Route::post('services/match', [InternalServiceCatalogController::class, 'match'])->name('services.match');
 
     // Búsqueda unificada de clientes/órdenes/cotizaciones.
     Route::get('search', InternalSearchController::class)->name('search');

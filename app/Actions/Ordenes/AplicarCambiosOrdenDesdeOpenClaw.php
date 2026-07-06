@@ -2,12 +2,12 @@
 
 namespace App\Actions\Ordenes;
 
+use App\Actions\Servicios\MatchearServicioCatalogo;
 use App\Exceptions\OrdenBloqueadaException;
 use App\Models\OpenClawOrderChange;
 use App\Models\OrdenServicio;
 use App\Models\Servicio;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 /**
  * Applies structured changes (services / parts / notes) from OpenClaw to a service
@@ -23,7 +23,10 @@ use Illuminate\Support\Str;
  */
 class AplicarCambiosOrdenDesdeOpenClaw
 {
-    public function __construct(private CalcularTotalesOrdenServicio $calculadora) {}
+    public function __construct(
+        private CalcularTotalesOrdenServicio $calculadora,
+        private MatchearServicioCatalogo $matcher,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $ops  {servicios?, servicios_sugeridos?, refacciones?, notas?}
@@ -217,49 +220,9 @@ class AplicarCambiosOrdenDesdeOpenClaw
 
         $descripcion = trim((string) ($servicio['descripcion'] ?? ''));
 
-        return $descripcion !== '' ? $this->matchCatalogo($descripcion) : null;
-    }
-
-    /**
-     * @return Servicio|string|null
-     */
-    private function matchCatalogo(string $descripcion): Servicio|string|null
-    {
-        $objetivo = $this->normalizar($descripcion);
-        if ($objetivo === '') {
-            return null;
-        }
-
-        $servicios = Servicio::query()->where('activo', true)->get();
-
-        $exactos = $servicios->filter(
-            fn (Servicio $servicio): bool => $this->normalizar($servicio->nombre) === $objetivo,
-        )->values();
-        if ($exactos->count() === 1) {
-            return $exactos->first();
-        }
-        if ($exactos->count() > 1) {
-            return 'ambiguo';
-        }
-
-        $parciales = $servicios->filter(function (Servicio $servicio) use ($objetivo): bool {
-            $nombre = $this->normalizar($servicio->nombre);
-
-            return $nombre !== '' && (str_contains($nombre, $objetivo) || str_contains($objetivo, $nombre));
-        })->values();
-        if ($parciales->count() === 1) {
-            return $parciales->first();
-        }
-        if ($parciales->count() > 1) {
-            return 'ambiguo';
-        }
-
-        return null;
-    }
-
-    private function normalizar(string $texto): string
-    {
-        return Str::of($texto)->ascii()->lower()->squish()->value();
+        // Match estricto contra el catálogo activo actual (compartido con
+        // /services/match): único → línea real; ambiguo/ninguno → warning.
+        return $descripcion !== '' ? $this->matcher->matchUnico($descripcion) : null;
     }
 
     private function numero(mixed $valor): ?float
