@@ -45,6 +45,31 @@ class OrdenServicio extends Model
     ];
 
     /**
+     * Human readable labels per status (same wording the panel badge uses).
+     *
+     * @var array<string, string>
+     */
+    public const ESTADOS_LABELS = [
+        'recibido' => 'Recibido',
+        'en_diagnostico' => 'En diagnóstico',
+        'cotizacion_pendiente' => 'Cotización pendiente',
+        'cotizacion_aprobada' => 'Cotización aprobada',
+        'en_proceso' => 'En proceso',
+        'en_fixop' => 'En Fixop',
+        'listo_para_entregar' => 'Listo para entregar',
+        'entregado' => 'Entregado',
+        'cancelado' => 'Cancelado',
+    ];
+
+    /**
+     * Get the human readable label for the current status.
+     */
+    public function estadoLabel(): string
+    {
+        return self::ESTADOS_LABELS[$this->estado] ?? str_replace('_', ' ', ucfirst((string) $this->estado));
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

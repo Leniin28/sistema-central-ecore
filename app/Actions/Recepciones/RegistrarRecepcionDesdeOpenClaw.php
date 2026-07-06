@@ -3,14 +3,13 @@
 namespace App\Actions\Recepciones;
 
 use App\Actions\OpenClaw\ObtenerUsuarioSistema;
+use App\Actions\OpenClaw\ResolverPartnerLogistico;
 use App\Actions\Ordenes\AplicarCambiosOrdenDesdeOpenClaw;
 use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cliente;
 use App\Models\Equipo;
 use App\Models\OrdenServicio;
-use App\Models\Partner;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 /**
  * Registers a reception/service order from data OpenClaw extracted from a photo
@@ -31,6 +30,7 @@ class RegistrarRecepcionDesdeOpenClaw
         private CrearOrdenServicio $crearOrden,
         private AplicarCambiosOrdenDesdeOpenClaw $aplicarCambios,
         private ObtenerUsuarioSistema $usuarioSistema,
+        private ResolverPartnerLogistico $resolverPartner,
     ) {}
 
     /**
@@ -135,10 +135,10 @@ class RegistrarRecepcionDesdeOpenClaw
     /**
      * Resolves the logistics partner (branch) detected on the label. Order of
      * preference: explicit partner_recepcion_id (already validated as an active
-     * logistics partner by the controller), then a case/accent-insensitive name
-     * match tolerant to variants ("Alameda" → "Electrocom Alameda"). A miss or an
-     * ambiguous match never fails the reception: it returns a warning and the
-     * detected text so it can be kept in the notes.
+     * logistics partner by the controller), then the shared tolerant name match
+     * ({@see ResolverPartnerLogistico}). A miss or an ambiguous match never fails
+     * the reception: it returns a warning and the detected text so it can be
+     * kept in the notes.
      *
      * @param  array<string, mixed>  $data
      * @return array{id: int|null, warning: string|null, texto: string|null}
@@ -152,75 +152,12 @@ class RegistrarRecepcionDesdeOpenClaw
             return ['id' => (int) $explicitId, 'warning' => null, 'texto' => null];
         }
 
-        $texto = $this->primerTextoLleno([
+        return $this->resolverPartner->ejecutar($this->primerTextoLleno([
             $recepcion['partner_logistico'] ?? null,
             $recepcion['partner_logistico_nombre'] ?? null,
             $recepcion['sucursal_nombre'] ?? null,
             $data['partner_logistico'] ?? null,
-        ]);
-
-        if ($texto === null) {
-            return ['id' => null, 'warning' => null, 'texto' => null];
-        }
-
-        $match = $this->buscarPartnerPorNombre($texto);
-
-        if ($match instanceof Partner) {
-            return ['id' => $match->id, 'warning' => null, 'texto' => $texto];
-        }
-
-        $warning = $match === 'ambiguo'
-            ? "La sucursal \"{$texto}\" coincide con más de un partner logístico; asígnalo manualmente en el panel."
-            : "No se encontró un partner logístico que coincida con \"{$texto}\"; la orden quedó sin partner. Asígnalo en el panel.";
-
-        return ['id' => null, 'warning' => $warning, 'texto' => $texto];
-    }
-
-    /**
-     * @return Partner|string|null  Partner if unique match; 'ambiguo' if several; null if none.
-     */
-    private function buscarPartnerPorNombre(string $texto): Partner|string|null
-    {
-        $objetivo = $this->normalizarNombre($texto);
-        if ($objetivo === '') {
-            return null;
-        }
-
-        $partners = Partner::query()
-            ->where('tipo_socio', 'logistico')
-            ->where('activo', true)
-            ->get();
-
-        // 1. Coincidencia exacta (normalizada).
-        $exactos = $partners->filter(
-            fn (Partner $partner): bool => $this->normalizarNombre($partner->nombre) === $objetivo,
-        )->values();
-        if ($exactos->count() === 1) {
-            return $exactos->first();
-        }
-        if ($exactos->count() > 1) {
-            return 'ambiguo';
-        }
-
-        // 2. Coincidencia parcial en cualquier dirección ("Alameda" ⊂ "Electrocom Alameda").
-        $parciales = $partners->filter(function (Partner $partner) use ($objetivo): bool {
-            $nombre = $this->normalizarNombre($partner->nombre);
-
-            return $nombre !== '' && (str_contains($nombre, $objetivo) || str_contains($objetivo, $nombre));
-        })->values();
-        if ($parciales->count() === 1) {
-            return $parciales->first();
-        }
-        if ($parciales->count() > 1) {
-            return 'ambiguo';
-        }
-
-        return null;
-    }
-
-    private function normalizarNombre(string $texto): string
-    {
-        return Str::of($texto)->ascii()->lower()->squish()->value();
+        ]));
     }
 
     /**
