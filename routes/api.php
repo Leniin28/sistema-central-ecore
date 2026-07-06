@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\InternalQuoteController;
 use App\Http\Controllers\Api\InternalReceptionController;
+use App\Http\Controllers\Api\InternalSearchController;
 use App\Http\Controllers\Api\InternalServiceOrderController;
 use Illuminate\Support\Facades\Route;
 
@@ -27,4 +28,7 @@ Route::middleware(['internal.api', 'throttle:30,1'])->prefix('internal')->name('
     // Cambiar el estado de una orden. `entregado` exige confirm_final_delivery=true.
     Route::post('service-orders/{orden}/status', [InternalServiceOrderController::class, 'status'])
         ->name('service-orders.status');
+
+    // Búsqueda unificada de clientes/órdenes/cotizaciones.
+    Route::get('search', InternalSearchController::class)->name('search');
 });
