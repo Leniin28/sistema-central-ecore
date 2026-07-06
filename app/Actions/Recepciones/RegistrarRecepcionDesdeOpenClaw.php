@@ -2,12 +2,13 @@
 
 namespace App\Actions\Recepciones;
 
+use App\Actions\OpenClaw\ObtenerUsuarioSistema;
+use App\Actions\Ordenes\AplicarCambiosOrdenDesdeOpenClaw;
 use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cliente;
 use App\Models\Equipo;
 use App\Models\OrdenServicio;
 use App\Models\Partner;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -26,7 +27,11 @@ use Illuminate\Support\Str;
  */
 class RegistrarRecepcionDesdeOpenClaw
 {
-    public function __construct(private CrearOrdenServicio $crearOrden) {}
+    public function __construct(
+        private CrearOrdenServicio $crearOrden,
+        private AplicarCambiosOrdenDesdeOpenClaw $aplicarCambios,
+        private ObtenerUsuarioSistema $usuarioSistema,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data  Server-validated payload.
@@ -45,6 +50,8 @@ class RegistrarRecepcionDesdeOpenClaw
                         'orden' => $existente->loadMissing(['cliente', 'equipo']),
                         'created' => false,
                         'warnings' => [],
+                        'servicios_agregados' => [],
+                        'refacciones_agregadas' => [],
                     ];
                 }
             }
@@ -70,39 +77,26 @@ class RegistrarRecepcionDesdeOpenClaw
                     'external_id' => $data['external_id'] ?? null,
                     'origen' => $data['recepcion']['origen'] ?? 'openclaw',
                 ],
-                [], // servicios: sin servicio_id de catálogo → no se crean detalles facturables.
-                [], // refacciones: se dejan como texto sugerido (ver componerNotas()).
-                $this->usuarioSistema(),
+                [], // Las líneas reales se agregan abajo con AplicarCambiosOrdenDesdeOpenClaw.
+                [],
+                $this->usuarioSistema->ejecutar(),
             );
 
+            // Servicios (match de catálogo) y refacciones (texto libre) como líneas reales.
+            // La idempotencia de la recepción ya la cubre external_id de la orden → aquí null.
+            $cambios = $this->aplicarCambios->ejecutar($orden, [
+                'servicios' => $data['servicios'] ?? [],
+                'refacciones' => $data['refacciones'] ?? [],
+            ], null);
+
             return [
-                'orden' => $orden->loadMissing(['cliente', 'equipo']),
+                'orden' => $cambios['orden']->loadMissing(['cliente', 'equipo']),
                 'created' => true,
-                'warnings' => $warnings,
+                'warnings' => array_merge($warnings, $cambios['warnings']),
+                'servicios_agregados' => $cambios['servicios_agregados'],
+                'refacciones_agregadas' => $cambios['refacciones_agregadas'],
             ];
         });
-    }
-
-    /**
-     * The internal API has no web session, but orders require a non-null creator
-     * (FK restrictOnDelete). We attribute them to a dedicated system user with the
-     * admin role (so CrearOrdenServicio's authorization passes) and an unusable
-     * random password. It is created lazily once; pre-seed it in production.
-     *
-     * @param array<string, mixed> $data
-     */
-    private function usuarioSistema(): User
-    {
-        $email = (string) config('services.openclaw.system_user_email', 'openclaw-bot@sistema.local');
-
-        return User::firstOrCreate(
-            ['email' => $email],
-            [
-                'name' => 'OpenClaw (sistema)',
-                'password' => bcrypt(Str::random(64)),
-                'role' => 'admin',
-            ],
-        );
     }
 
     /** @param array<string, mixed> $data */
@@ -293,18 +287,6 @@ class RegistrarRecepcionDesdeOpenClaw
             $bloques[] = "Datos de etiqueta:\n".implode("\n", $meta);
         }
 
-        $servicios = $this->lineasSugeridas($data['servicios'] ?? []);
-        if ($servicios !== []) {
-            $bloques[] = "Servicios sugeridos (de etiqueta, aún no cargados al catálogo):\n".implode("\n", $servicios);
-            $warnings[] = 'Los servicios llegaron como texto libre; cárgalos desde el catálogo con su precio en el panel para poder facturarlos.';
-        }
-
-        $refacciones = $this->lineasSugeridas($data['refacciones'] ?? []);
-        if ($refacciones !== []) {
-            $bloques[] = "Refacciones sugeridas (de etiqueta):\n".implode("\n", $refacciones);
-            $warnings[] = 'Las refacciones llegaron como texto libre; cárgalas en la orden con costo y precio para que se reflejen en finanzas.';
-        }
-
         if (filled($recepcion['notas'] ?? null)) {
             $bloques[] = 'Notas de recepción:\n'.trim((string) $recepcion['notas']);
         }
@@ -315,26 +297,5 @@ class RegistrarRecepcionDesdeOpenClaw
         $bloques[] = 'Registrado automáticamente por OpenClaw a partir de una foto de etiqueta física.';
 
         return [implode("\n\n", $bloques), $warnings];
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $filas
-     * @return array<int, string>
-     */
-    private function lineasSugeridas(array $filas): array
-    {
-        return collect($filas)
-            ->filter(fn ($fila): bool => is_array($fila) && filled($fila['descripcion'] ?? null))
-            ->map(function (array $fila): string {
-                $linea = '- '.trim((string) $fila['descripcion']);
-
-                if (isset($fila['precio']) && $fila['precio'] !== null) {
-                    $linea .= ' ($'.number_format((float) $fila['precio'], 2).')';
-                }
-
-                return $linea;
-            })
-            ->values()
-            ->all();
     }
 }

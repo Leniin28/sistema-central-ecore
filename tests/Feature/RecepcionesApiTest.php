@@ -1,9 +1,11 @@
 <?php
 
+use App\Models\CategoriaServicio;
 use App\Models\Cliente;
 use App\Models\Equipo;
 use App\Models\OrdenServicio;
 use App\Models\Partner;
+use App\Models\Servicio;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -93,9 +95,11 @@ test('la API de recepción crea cliente, equipo y orden con datos mínimos', fun
         ->and($orden->notas)->toContain('No enciende');
 });
 
-test('la API de recepción acepta el payload completo con servicios y refacciones opcionales y devuelve warnings', function () {
+test('la API de recepción agrega refacción real y deja el servicio sin catálogo como warning', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
 
+    // Sin catálogo sembrado: "Servicio de Optimización" no matchea → warning (no línea falsa).
+    // La refacción "SSD 120GB" (texto libre, precio 680) sí se agrega como línea real.
     $response = $this->withToken('token-secreto-pruebas')
         ->postJson('/api/internal/receptions', payloadRecepcionApi());
 
@@ -103,17 +107,36 @@ test('la API de recepción acepta el payload completo con servicios y refaccione
         ->assertJsonPath('created', true)
         ->assertJsonPath('origen', 'telegram_foto_etiqueta');
 
-    // Servicios/refacciones de la etiqueta se guardan como texto sugerido, no como
-    // líneas facturables: total 0 y se avisa por warnings.
-    expect($response->json('warnings'))->toBeArray()->not->toBeEmpty();
+    expect(collect($response->json('warnings'))->contains(fn ($w) => str_contains($w, 'Servicio de Optimización')))->toBeTrue()
+        ->and($response->json('refacciones_agregadas'))->toHaveCount(1)
+        ->and($response->json('servicios_agregados'))->toHaveCount(0);
 
     $orden = OrdenServicio::firstWhere('external_id', 'telegram-photo-001');
-    expect((float) $orden->total_cliente)->toBe(0.0)
-        ->and($orden->detalles()->count())->toBe(0)
-        ->and($orden->refacciones()->count())->toBe(0)
-        ->and($orden->notas)->toContain('Servicio de Optimización')
-        ->and($orden->notas)->toContain('SSD 120GB')
+    expect($orden->detalles()->count())->toBe(0)          // servicio sin catálogo: no crea línea
+        ->and($orden->refacciones()->count())->toBe(1)     // refacción real
+        ->and((float) $orden->total_cliente)->toBe(680.0)  // total = precio de la refacción
         ->and($orden->notas)->toContain('4837');
+});
+
+test('la API de recepción agrega un servicio real cuando matchea el catálogo', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    crearServicioCatalogo('Servicio de Optimización', 550);
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', [
+            'cliente' => ['nombre' => 'Cliente Match'],
+            'equipo' => ['tipo_equipo' => 'Laptop', 'marca' => 'HP'],
+            'recepcion' => ['falla_reportada' => 'Lenta'],
+            'servicios' => [['descripcion' => 'optimización', 'precio' => 550]],
+            'external_id' => 'telegram-photo-servicio-match',
+        ]);
+
+    $response->assertCreated();
+    expect($response->json('servicios_agregados'))->toHaveCount(1);
+
+    $orden = OrdenServicio::firstWhere('external_id', 'telegram-photo-servicio-match');
+    expect($orden->detalles()->count())->toBe(1)
+        ->and((float) $orden->total_cliente)->toBe(550.0);
 });
 
 test('la API de recepción es idempotente con el mismo external_id', function () {
@@ -173,6 +196,18 @@ test('la API de recepción exige cliente y equipo identificable', function () {
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['cliente_id', 'cliente', 'equipo.tipo_equipo', 'equipo.modelo']);
 });
+
+function crearServicioCatalogo(string $nombre, float $precio): Servicio
+{
+    $categoria = CategoriaServicio::firstOrCreate(['nombre' => 'General']);
+
+    return Servicio::create([
+        'categoria_servicio_id' => $categoria->id,
+        'nombre' => $nombre,
+        'precio_base' => $precio,
+        'activo' => true,
+    ]);
+}
 
 function crearPartnersLogisticos(): void
 {

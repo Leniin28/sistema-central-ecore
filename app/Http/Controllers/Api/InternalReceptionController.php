@@ -53,14 +53,24 @@ class InternalReceptionController extends Controller
 
             'tipo_recepcion' => ['nullable', Rule::in(['sucursal', 'domicilio', 'directo'])],
 
-            // Servicios/refacciones: texto libre opcional extraído de la etiqueta.
+            // Servicios: se agregan como líneas reales si se resuelven contra el catálogo
+            // (servicio_id explícito o match por nombre); si no, quedan como warning.
             'servicios' => ['nullable', 'array'],
-            'servicios.*.descripcion' => ['required', 'string', 'max:255'],
+            'servicios.*.servicio_id' => ['nullable', 'integer', 'exists:servicios,id'],
+            'servicios.*.descripcion' => ['nullable', 'string', 'max:255'],
             'servicios.*.precio' => ['nullable', 'numeric', 'min:0'],
+            'servicios.*.precio_cliente' => ['nullable', 'numeric', 'min:0'],
+            'servicios.*.cantidad' => ['nullable', 'integer', 'min:1'],
+            'servicios.*.notas' => ['nullable', 'string', 'max:1000'],
 
+            // Refacciones: texto libre, se agregan como líneas reales.
             'refacciones' => ['nullable', 'array'],
             'refacciones.*.descripcion' => ['required', 'string', 'max:255'],
             'refacciones.*.precio' => ['nullable', 'numeric', 'min:0'],
+            'refacciones.*.precio_cliente' => ['nullable', 'numeric', 'min:0'],
+            'refacciones.*.costo_unitario' => ['nullable', 'numeric', 'min:0'],
+            'refacciones.*.cantidad' => ['nullable', 'integer', 'min:1'],
+            'refacciones.*.notas' => ['nullable', 'string', 'max:1000'],
 
             'notas' => ['nullable', 'string', 'max:3000'],
             'external_id' => ['nullable', 'string', 'max:255'],
@@ -113,6 +123,9 @@ class InternalReceptionController extends Controller
                 'id' => $orden->partnerRecepcion->id,
                 'nombre' => $orden->partnerRecepcion->nombre,
             ] : null,
+            'total_cliente' => (float) $orden->total_cliente,
+            'servicios_agregados' => $resultado['servicios_agregados'],
+            'refacciones_agregadas' => $resultado['refacciones_agregadas'],
             'show_url' => route('admin.ordenes-servicio.show', $orden),
             'mensaje_resumen' => $this->mensajeResumen($orden, $resultado['created']),
             'warnings' => $resultado['warnings'],

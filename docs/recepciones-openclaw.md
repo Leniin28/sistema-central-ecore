@@ -85,14 +85,27 @@ Resolución por nombre (solo partners logísticos activos), tolerante a variante
 El partner asignado (o `null`) se devuelve en la respuesta como `partner_recepcion`.
 Las órdenes por API interna siguen sin exigir partner (una recepción mínima es válida).
 
-### Servicios y refacciones: por qué van a notas
+### Servicios y refacciones (líneas reales)
 
-Los detalles facturables (`OrdenServicioDetalle`) requieren un `servicio_id` del
-catálogo y un precio verificado. Lo extraído de una etiqueta es texto libre de baja
-confianza, así que **no se crean líneas facturables**: se guardan como texto en las
-**notas** de la orden y se devuelven en `warnings` para que el staff los confirme y
-cargue en el panel. `total_cliente` queda en `0` y **no se generan movimientos
-financieros**.
+Desde la versión de jul 2026 los servicios y refacciones se agregan como **líneas
+reales** de la orden (reutilizando `AplicarCambiosOrdenDesdeOpenClaw` — el mismo
+motor del endpoint de edición, ver `docs/ordenes-openclaw.md`). `total_cliente` se
+recalcula con la fórmula del panel. Campos por línea:
+
+- **`servicios[]`**: `servicio_id` (catálogo) **o** `descripcion` (se intenta empatar
+  con el catálogo por nombre), `precio_cliente` (o `precio`; default = `precio_base`
+  del catálogo), `cantidad` (default 1), `notas`.
+- **`refacciones[]`**: `descripcion*`, `precio_cliente` (o `precio`), `costo_unitario`
+  (default 0), `cantidad` (default 1), `notas`. Aceptan **texto libre**.
+
+Reglas del auto-match de servicios (solo catálogo activo, insensible a mayúsculas/
+acentos): match exacto y luego parcial; **no adivina** — si no hay match o es
+ambiguo, **no se crea línea facturable falsa**: se devuelve un `warning` y el texto
+queda en las notas. Las refacciones siempre se crean (texto libre permitido).
+
+No se generan movimientos financieros al agregar líneas (eso solo ocurre al pasar la
+orden a `entregado`). Las líneas agregadas se devuelven en `servicios_agregados` /
+`refacciones_agregadas`.
 
 ## Respuesta
 
@@ -112,9 +125,15 @@ financieros**.
     "password_equipo_registrada": true
   },
   "partner_recepcion": { "id": 1, "nombre": "Electrocom Alameda" },
+  "total_cliente": 680.0,
+  "servicios_agregados": [],
+  "refacciones_agregadas": [
+    { "descripcion": "SSD 120GB", "cantidad": 1, "costo_unitario": 400.0,
+      "precio_unitario_cliente": 680.0, "precio_total_cliente": 680.0 }
+  ],
   "show_url": "http://sistema-central-ecore.test/admin/ordenes-servicio/12",
   "mensaje_resumen": "Recepción registrada: orden OS-20260705-0001 para José Luis Olvera (Laptop HP).",
-  "warnings": [ "Los servicios llegaron como texto libre; cárgalos desde el catálogo…" ]
+  "warnings": [ "No se encontró en el catálogo un servicio que coincida con \"…\"; …" ]
 }
 ```
 
@@ -133,6 +152,10 @@ financieros**.
   ambos se crean/siembran a mano; la resolución por nombre solo acierta si los
   partners existen con nombres reconocibles. Sin seeder por ahora (decisión del
   2026-07-05).
+- **Revisión de nombres del catálogo de servicios** para reducir ambigüedad del
+  auto-match (hay varios servicios que contienen "optimización" y el match cae a
+  warning). Pospuesto (2026-07-05) hasta probar el flujo real con OpenClaw
+  integrado al endpoint de cambios.
 
 ### Atribución (usuario de sistema)
 
