@@ -11,17 +11,8 @@ use Illuminate\Validation\Rule;
 
 class OrdenServicioEstadoController extends Controller
 {
-    private const ESTADOS = [
-        'recibido',
-        'en_diagnostico',
-        'cotizacion_pendiente',
-        'cotizacion_aprobada',
-        'en_proceso',
-        'en_fixop',
-        'listo_para_entregar',
-        'entregado',
-        'cancelado',
-    ];
+    // Lista canónica compartida con la API interna (OpenClaw).
+    private const ESTADOS = OrdenServicio::ESTADOS;
 
     /**
      * Store a service order status change.

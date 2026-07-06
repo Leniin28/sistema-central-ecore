@@ -31,6 +31,19 @@ class OrdenServicio extends Model
 {
     protected $table = 'ordenes_servicio';
 
+    /** Valid order statuses, in workflow order. */
+    public const ESTADOS = [
+        'recibido',
+        'en_diagnostico',
+        'cotizacion_pendiente',
+        'cotizacion_aprobada',
+        'en_proceso',
+        'en_fixop',
+        'listo_para_entregar',
+        'entregado',
+        'cancelado',
+    ];
+
     /**
      * Get the attributes that should be cast.
      *
