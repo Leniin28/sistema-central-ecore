@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Cotizaciones\ConvertirCotizacionEnOrden;
 use App\Actions\Cotizaciones\CrearCotizacion;
 use App\Http\Controllers\Controller;
 use App\Models\Cotizacion;
@@ -100,6 +101,138 @@ class InternalQuoteController extends Controller
             'show_url' => route('admin.cotizaciones.show', $cotizacion),
             'web_urls_require_session' => true,
         ], 201);
+    }
+
+    /**
+     * List quotes still waiting for a client answer (borrador/enviada), for
+     * OpenClaw follow-ups: "cotizaciones pendientes", "cuáles no han contestado".
+     */
+    public function pending(Request $request): JsonResponse
+    {
+        $filtros = $request->validate([
+            'older_than_days' => ['nullable', 'integer', 'min:0'],
+            'cliente' => ['nullable', 'string', 'max:255'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $limite = (int) ($filtros['limit'] ?? 20);
+        $warnings = [];
+
+        $pendientes = Cotizacion::query()
+            ->whereIn('estado', ['borrador', 'enviada'])
+            ->when($filtros['cliente'] ?? null, function ($query, string $cliente): void {
+                $query->whereHas('cliente', function ($sub) use ($cliente): void {
+                    $sub->where('nombre', 'like', "%{$cliente}%")->orWhere('telefono', 'like', "%{$cliente}%");
+                });
+            })
+            ->with('cliente')
+            ->orderBy('fecha')
+            ->get()
+            ->filter(function (Cotizacion $cotizacion) use ($filtros): bool {
+                if (! isset($filtros['older_than_days'])) {
+                    return true;
+                }
+                $fecha = $cotizacion->fecha ?? $cotizacion->created_at;
+
+                return $fecha !== null
+                    && (int) $fecha->copy()->startOfDay()->diffInDays(today(), false) >= (int) $filtros['older_than_days'];
+            })
+            ->values();
+
+        if ($pendientes->count() > $limite) {
+            $warnings[] = "Hay {$pendientes->count()} cotizaciones pendientes; se devolvieron las {$limite} más antiguas.";
+        }
+
+        return response()->json([
+            'items' => $pendientes->take($limite)->map(function (Cotizacion $cotizacion): array {
+                $fecha = $cotizacion->fecha ?? $cotizacion->created_at;
+
+                return [
+                    'id' => $cotizacion->id,
+                    'folio' => $cotizacion->folio,
+                    'estado' => $cotizacion->estado,
+                    'cliente' => $cotizacion->cliente?->nombre,
+                    'telefono' => $cotizacion->cliente?->telefono,
+                    'total' => (float) $cotizacion->total,
+                    'saldo' => (float) $cotizacion->saldo,
+                    'dias_pendiente' => max(0, (int) ($fecha?->copy()->startOfDay()->diffInDays(today(), false) ?? 0)),
+                    'vigencia' => $cotizacion->vigencia?->toDateString(),
+                    'show_url' => route('admin.cotizaciones.show', $cotizacion),
+                    'pdf_url' => route('api.internal.quotes.pdf', $cotizacion),
+                    'png_url' => route('api.internal.quotes.png', $cotizacion),
+                ];
+            })->values()->all(),
+            'warnings' => $warnings,
+        ]);
+    }
+
+    /**
+     * Convert an accepted quote into a service order (OpenClaw). Idempotent by
+     * external_id; unresolved service items become warnings/notes, never fake
+     * catalog lines.
+     */
+    public function convertToOrder(Request $request, Cotizacion $cotizacion, ConvertirCotizacionEnOrden $accion): JsonResponse
+    {
+        $data = $request->validate([
+            'external_id' => ['nullable', 'string', 'max:255'],
+            'partner_recepcion_id' => [
+                'nullable', 'integer',
+                Rule::exists('partners', 'id')->where(
+                    fn ($query) => $query->where('tipo_socio', 'logistico')->where('activo', true),
+                ),
+            ],
+            'partner_logistico' => ['nullable', 'string', 'max:255'],
+
+            'recepcion' => ['nullable', 'array'],
+            'recepcion.falla_reportada' => ['nullable', 'string', 'max:3000'],
+            'recepcion.notas' => ['nullable', 'string', 'max:3000'],
+
+            'equipo' => ['nullable', 'array'],
+            'equipo.tipo_equipo' => ['nullable', 'string', 'max:100'],
+            'equipo.marca' => ['nullable', 'string', 'max:100'],
+            'equipo.modelo' => ['nullable', 'string', 'max:100'],
+            'equipo.numero_serie' => ['nullable', 'string', 'max:150'],
+            'equipo.password_equipo' => ['nullable', 'string', 'max:150'],
+        ]);
+
+        $resultado = $accion->ejecutar($cotizacion, $data);
+
+        $orden = $resultado['orden'];
+
+        Log::info('API interna: cotización convertida en orden.', [
+            'cotizacion_id' => $resultado['cotizacion']->id,
+            'orden_id' => $orden->id,
+            'folio' => $orden->folio,
+            'created' => $resultado['created'],
+        ]);
+
+        return response()->json([
+            'created' => $resultado['created'],
+            'id' => $orden->id,
+            'folio' => $orden->folio,
+            'estado' => $orden->estado,
+            'external_id' => $orden->external_id,
+            'cotizacion' => [
+                'id' => $resultado['cotizacion']->id,
+                'folio' => $resultado['cotizacion']->folio,
+                'estado' => $resultado['cotizacion']->estado,
+            ],
+            'cliente' => [
+                'id' => $orden->cliente?->id,
+                'nombre' => $orden->cliente?->nombre,
+            ],
+            'equipo' => $orden->equipo ? [
+                'id' => $orden->equipo->id,
+                'tipo_equipo' => $orden->equipo->tipo_equipo,
+                'marca' => $orden->equipo->marca,
+                'modelo' => $orden->equipo->modelo,
+                'password_registrada' => filled($orden->equipo->password_equipo),
+            ] : null,
+            'partner_recepcion' => $orden->partnerRecepcion?->nombre,
+            'total_cliente' => (float) $orden->total_cliente,
+            'warnings' => $resultado['warnings'],
+            'show_url' => route('admin.ordenes-servicio.show', $orden),
+        ], $resultado['created'] ? 201 : 200);
     }
 
     /**

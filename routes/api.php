@@ -10,8 +10,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['internal.api', 'throttle:30,1'])->prefix('internal')->name('api.internal.')->group(function () {
     Route::post('quotes', [InternalQuoteController::class, 'store'])->name('quotes.store');
+    // "pending" antes que {cotizacion} para que no lo capture el binding.
+    Route::get('quotes/pending', [InternalQuoteController::class, 'pending'])->name('quotes.pending');
     Route::get('quotes/{cotizacion}/pdf', [InternalQuoteController::class, 'pdf'])->name('quotes.pdf');
     Route::get('quotes/{cotizacion}/png', [InternalQuoteController::class, 'png'])->name('quotes.png');
+
+    // Convertir una cotización aceptada en orden de servicio (idempotente por external_id).
+    Route::post('quotes/{cotizacion}/convert-to-order', [InternalQuoteController::class, 'convertToOrder'])
+        ->name('quotes.convert-to-order');
 
     Route::post('receptions', [InternalReceptionController::class, 'store'])->name('receptions.store');
 
