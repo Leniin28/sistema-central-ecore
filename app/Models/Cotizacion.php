@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'folio',
@@ -107,6 +108,12 @@ class Cotizacion extends Model
     public function items(): HasMany
     {
         return $this->hasMany(CotizacionItem::class);
+    }
+
+    /** Get the order created from this accepted quote, when one exists. */
+    public function ordenServicio(): HasOne
+    {
+        return $this->hasOne(OrdenServicio::class);
     }
 
     /**

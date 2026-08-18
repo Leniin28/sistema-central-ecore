@@ -50,6 +50,7 @@ class ActualizarOrdenServicio
             $orden->update([
                 'total_cliente' => $resumen['total_cliente'],
                 'utilidad_estimada' => $resumen['utilidad_estimada'],
+                'costos_incompletos' => $resumen['costos_incompletos'],
             ]);
 
             return $orden->fresh();

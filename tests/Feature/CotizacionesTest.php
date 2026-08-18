@@ -1,10 +1,13 @@
 <?php
 
 use App\Actions\Cotizaciones\CrearCotizacion;
+use App\Models\CategoriaServicio;
 use App\Models\Cliente;
 use App\Models\Cotizacion;
 use App\Models\Equipo;
+use App\Models\OrdenServicio;
 use App\Models\Partner;
+use App\Models\Servicio;
 use App\Models\User;
 use App\Services\ExportarCotizacionPng;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -151,6 +154,91 @@ test('no se puede editar una cotizacion aceptada', function () {
     $this->actingAs($datos['admin'])
         ->get(route('admin.cotizaciones.edit', $cotizacion))
         ->assertForbidden();
+});
+
+test('aceptar desde el panel crea una orden con las lineas de la cotizacion', function () {
+    $datos = datosCotizacion();
+    $cotizacion = app(CrearCotizacion::class)->ejecutar([
+        'cliente_id' => $datos['cliente']->id,
+        'equipo_id' => $datos['equipo']->id,
+    ], itemsCotizacion(), $datos['admin']);
+
+    $this->actingAs($datos['admin'])
+        ->post(route('admin.cotizaciones.estado.store', $cotizacion), ['estado' => 'aceptada'])
+        ->assertRedirect(route('admin.cotizaciones.show', $cotizacion));
+
+    expect($cotizacion->fresh()->estado)->toBe('aceptada')
+        ->and(OrdenServicio::count())->toBe(1);
+});
+
+test('aceptar desde el panel traslada snapshots, costos y lineas sin duplicarlos', function () {
+    $datos = datosCotizacion();
+    $categoria = CategoriaServicio::create(['nombre' => 'Mantenimiento']);
+    $servicioExacto = Servicio::create([
+        'categoria_servicio_id' => $categoria->id,
+        'nombre' => 'Servicio de mantenimiento',
+        'precio_base' => 300,
+        'activo' => true,
+    ]);
+    Servicio::create([
+        'categoria_servicio_id' => $categoria->id,
+        'nombre' => 'Mantenimiento',
+        'precio_base' => 500,
+        'activo' => true,
+    ]);
+
+    $cotizacion = app(CrearCotizacion::class)->ejecutar([
+        'cliente_id' => $datos['cliente']->id,
+        'equipo_id' => $datos['equipo']->id,
+    ], [
+        ['tipo' => 'servicio', 'descripcion' => 'Servicio de mantenimiento', 'cantidad' => 2, 'precio_unitario' => 300, 'costo_unitario' => 60],
+        ['tipo' => 'servicio', 'descripcion' => 'Mantenimiento laptop', 'cantidad' => 1, 'precio_unitario' => 500, 'costo_unitario' => 100],
+        ['tipo' => 'refaccion', 'descripcion' => 'SSD 1TB', 'cantidad' => 1, 'precio_unitario' => 1000, 'costo_unitario' => 650],
+    ], $datos['admin']);
+
+    $this->actingAs($datos['admin'])
+        ->post(route('admin.cotizaciones.estado.store', $cotizacion), ['estado' => 'aceptada'])
+        ->assertRedirect();
+    $this->actingAs($datos['admin'])
+        ->post(route('admin.cotizaciones.estado.store', $cotizacion), ['estado' => 'aceptada'])
+        ->assertRedirect();
+
+    $orden = $cotizacion->fresh('ordenServicio')->ordenServicio;
+    expect($orden)->not->toBeNull()
+        ->and(OrdenServicio::count())->toBe(1)
+        ->and($orden->detalles)->toHaveCount(2)
+        ->and($orden->refacciones)->toHaveCount(1)
+        ->and((float) $orden->total_cliente)->toBe(2100.0)
+        ->and((float) $orden->utilidad_estimada)->toBe(1230.0);
+
+    $detalleExacto = $orden->detalles()->where('descripcion', 'Servicio de mantenimiento')->firstOrFail();
+    $detalleAdHoc = $orden->detalles()->where('descripcion', 'Mantenimiento laptop')->firstOrFail();
+    $refaccion = $orden->refacciones()->firstOrFail();
+
+    expect($detalleExacto->servicio_id)->toBe($servicioExacto->id)
+        ->and((float) $detalleExacto->costo_unitario)->toBe(60.0)
+        ->and($detalleAdHoc->servicio_id)->toBeNull()
+        ->and($detalleAdHoc->descripcion)->toBe('Mantenimiento laptop')
+        ->and((float) $refaccion->costo_unitario)->toBe(650.0)
+        ->and($detalleExacto->cotizacion_item_id)->not->toBeNull()
+        ->and($refaccion->cotizacion_item_id)->not->toBeNull();
+});
+
+test('socio logistico no puede reprocesar una cotizacion ya aceptada', function () {
+    $datos = datosCotizacion();
+    $partner = Partner::create(['nombre' => 'Logística protegida', 'tipo_socio' => 'logistico', 'comision_fija' => 0, 'activo' => true]);
+    $logistico = User::factory()->create(['role' => 'socio_logistico', 'partner_id' => $partner->id, 'email_verified_at' => now()]);
+    $cotizacion = app(CrearCotizacion::class)->ejecutar([
+        'cliente_id' => $datos['cliente']->id,
+        'equipo_id' => $datos['equipo']->id,
+    ], itemsCotizacion(), $logistico);
+    $cotizacion->update(['estado' => 'aceptada']);
+
+    $this->actingAs($logistico)
+        ->post(route('logistica.cotizaciones.estado.store', $cotizacion), ['estado' => 'aceptada'])
+        ->assertSessionHasErrors('estado');
+
+    expect(OrdenServicio::count())->toBe(0);
 });
 
 test('socio tecnico no puede acceder a cotizaciones', function () {

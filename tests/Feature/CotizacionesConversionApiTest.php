@@ -11,6 +11,40 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+test('conversion rejects a quote line already traced as the opposite order-line type', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cotizacion = cotizacionParaConvertir([
+        ['tipo' => 'servicio', 'descripcion' => 'Diagnostico cruzado', 'cantidad' => 1, 'precio_unitario' => 550, 'subtotal' => 550],
+    ]);
+    $usuario = \App\Models\User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $ordenPrevia = app(\App\Actions\Ordenes\CrearOrdenServicio::class)->ejecutar([
+        'cliente_id' => $cotizacion->cliente_id,
+        'tipo_recepcion' => 'directo',
+        'costo_tecnico' => 0,
+    ], [], [], $usuario);
+    $ordenPrevia->refacciones()->create([
+        'cotizacion_item_id' => $cotizacion->items->first()->id,
+        'descripcion' => 'Traza incorrecta previa',
+        'cantidad' => 1,
+        'precio_unitario_cliente' => 0,
+        'precio_total_cliente' => 0,
+        'utilidad_refaccion' => 0,
+    ]);
+
+    $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
+            'external_id' => 'telegram-quote-cross-type',
+            'recepcion' => ['falla_reportada' => 'Autorizado'],
+            'equipo' => ['tipo_equipo' => 'Laptop'],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['cotizacion']);
+
+    expect(\App\Models\OrdenServicio::count())->toBe(1)
+        ->and($ordenPrevia->detalles()->count())->toBe(0)
+        ->and($ordenPrevia->refacciones()->count())->toBe(1);
+});
+
 test('conversion transfers internal costs and creates traceable financial movements', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
     $cliente = Cliente::create(['nombre' => 'Cliente costos', 'telefono' => '4490000000', 'tipo_cliente' => 'mantenimiento']);
@@ -43,6 +77,69 @@ test('conversion transfers internal costs and creates traceable financial moveme
     expect((float) $orden->fresh()->utilidad_neta)->toBe(1110.0)
         ->and($orden->movimientosFinancieros()->where('categoria', 'servicio')->count())->toBe(1)
         ->and($orden->movimientosFinancieros()->where('categoria', 'refaccion')->count())->toBe(1);
+});
+
+test('conversion preserves unknown costs and does not create their expense movements', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cotizacion = cotizacionParaConvertir();
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
+            'external_id' => 'telegram-quote-costo-desconocido',
+            'recepcion' => ['falla_reportada' => 'Autorizado'],
+            'equipo' => ['tipo_equipo' => 'Laptop'],
+        ]);
+
+    $response->assertCreated();
+    $orden = OrdenServicio::findOrFail($response->json('id'));
+
+    expect($orden->detalles()->first()->costo_unitario)->toBeNull()
+        ->and($orden->detalles()->first()->costo_total)->toBeNull()
+        ->and($orden->refacciones()->first()->costo_unitario)->toBeNull()
+        ->and($orden->refacciones()->first()->costo_total)->toBeNull()
+        ->and($orden->costos_incompletos)->toBeTrue();
+
+    app(GenerarFinanzasOrdenServicio::class)->generar($orden);
+
+    expect($orden->movimientosFinancieros()->whereIn('categoria', ['servicio', 'refaccion'])->count())->toBe(0)
+        ->and($orden->movimientosFinancieros()->where('categoria', 'reparacion')->count())->toBe(1)
+        ->and($orden->fresh()->costos_incompletos)->toBeTrue();
+});
+
+test('linked historical quote copies only its missing lines during reconciliation', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cotizacion = cotizacionParaConvertir();
+    $cotizacion->update(['estado' => 'aceptada']);
+    $admin = \App\Models\User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $orden = app(\App\Actions\Ordenes\CrearOrdenServicio::class)->ejecutar([
+        'cotizacion_id' => $cotizacion->id,
+        'cliente_id' => $cotizacion->cliente_id,
+        'tipo_recepcion' => 'directo',
+        'costo_tecnico' => 0,
+    ], [], [], $admin);
+    $servicio = $cotizacion->items()->where('tipo', 'servicio')->firstOrFail();
+    $orden->detalles()->create([
+        'cotizacion_item_id' => $servicio->id,
+        'descripcion' => $servicio->descripcion,
+        'cantidad' => $servicio->cantidad,
+        'precio_unitario' => $servicio->precio_unitario,
+        'costo_unitario' => $servicio->costo_unitario,
+        'costo_total' => $servicio->costo_total,
+        'subtotal' => $servicio->subtotal,
+    ]);
+
+    $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
+            'external_id' => 'historica-parcial-1',
+            'recepcion' => ['falla_reportada' => 'Autorizado'],
+            'equipo' => ['tipo_equipo' => 'Laptop'],
+        ])
+        ->assertOk()
+        ->assertJsonPath('created', false);
+
+    expect($orden->fresh()->detalles()->count())->toBe(1)
+        ->and($orden->fresh()->refacciones()->count())->toBe(1)
+        ->and(OrdenServicio::count())->toBe(1);
 });
 
 function cotizacionParaConvertir(array $items = []): Cotizacion

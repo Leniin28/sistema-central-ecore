@@ -175,7 +175,9 @@ class CrearCotizacion
         }
 
         return array_map(function (array $item): array {
-            $item['costo_unitario'] = 0;
+            // A non-admin must not set an internal cost, but an omitted cost is
+            // unknown, not a known zero.
+            $item['costo_unitario'] = null;
 
             return $item;
         }, $items);

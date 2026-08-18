@@ -56,7 +56,7 @@ class GenerarFinanzasOrdenServicio
             }
 
             foreach ($orden->refacciones as $refaccion) {
-                if ((float) $refaccion->costo_total <= 0) {
+                if ($refaccion->costo_total === null || (float) $refaccion->costo_total <= 0) {
                     continue;
                 }
                 $this->crearMovimiento(
@@ -70,7 +70,7 @@ class GenerarFinanzasOrdenServicio
             }
 
             foreach ($orden->detalles as $detalle) {
-                if ((float) $detalle->costo_total <= 0) {
+                if ($detalle->costo_total === null || (float) $detalle->costo_total <= 0) {
                     continue;
                 }
 
@@ -88,6 +88,8 @@ class GenerarFinanzasOrdenServicio
                 'comision_logistica' => $comisionLogistica,
                 'utilidad_estimada' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
                 'utilidad_neta' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
+                'costos_incompletos' => $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)
+                    || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null),
                 'finanzas_generadas' => true,
             ]);
         });

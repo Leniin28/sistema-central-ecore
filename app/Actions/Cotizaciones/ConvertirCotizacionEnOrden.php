@@ -9,8 +9,11 @@ use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cotizacion;
 use App\Models\Equipo;
 use App\Models\OrdenServicio;
+use App\Models\OrdenServicioDetalle;
+use App\Models\OrdenServicioRefaccion;
 use App\Models\Servicio;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Converts an accepted quote into an order. Quote conversion deliberately does
@@ -36,6 +39,19 @@ class ConvertirCotizacionEnOrden
             $cotizacion = Cotizacion::query()->lockForUpdate()->findOrFail($cotizacion->id);
             $cotizacion->loadMissing(['cliente', 'equipo', 'items']);
 
+            $ordenVinculada = $cotizacion->ordenServicio()->first();
+            if ($ordenVinculada) {
+                $this->reconciliarLineas($ordenVinculada, $this->mapearItems($cotizacion));
+                $this->recalcularTotalesOrden($ordenVinculada);
+
+                return [
+                    'orden' => $ordenVinculada->fresh(['cliente', 'equipo', 'partnerRecepcion']),
+                    'cotizacion' => $cotizacion,
+                    'created' => false,
+                    'warnings' => [],
+                ];
+            }
+
             if (! empty($data['external_id'])) {
                 $existente = OrdenServicio::query()->where('external_id', $data['external_id'])->first();
 
@@ -54,16 +70,24 @@ class ConvertirCotizacionEnOrden
             $partner = $this->resolverPartnerLogistico($data, $warnings);
             $recepcion = $data['recepcion'] ?? [];
             $falla = trim((string) ($recepcion['falla_reportada'] ?? ''));
+            $origen = (string) ($data['origen'] ?? 'openclaw-cotizacion');
+            $origenNota = (string) ($data['origen_nota'] ?? 'OpenClaw');
             $bloques = [
                 'Falla reportada:'."\n".($falla !== '' ? $falla : 'Servicio autorizado desde cotización '.$cotizacion->folio),
                 "Origen:\nConvertida desde la cotización {$cotizacion->folio} por OpenClaw.",
             ];
+            $bloques[1] = "Origen:\nConvertida desde la cotización {$cotizacion->folio} por {$origenNota}.";
+
             if (filled($recepcion['notas'] ?? null)) {
                 $bloques[] = "Notas:\n".trim((string) $recepcion['notas']);
             }
 
+            $lineas = $this->mapearItems($cotizacion);
+            $this->validarTrazabilidadLineas($lineas);
+
             $orden = $this->crearOrden->ejecutar(
                 [
+                    'cotizacion_id' => $cotizacion->id,
                     'cliente_id' => $cotizacion->cliente_id,
                     'equipo_id' => $equipo?->id,
                     'partner_recepcion_id' => $partner,
@@ -71,26 +95,15 @@ class ConvertirCotizacionEnOrden
                     'notas' => implode("\n\n", $bloques),
                     'costo_tecnico' => 0,
                     'external_id' => $data['external_id'] ?? null,
-                    'origen' => 'openclaw-cotizacion',
+                    'origen' => $origen,
                 ],
                 [],
                 [],
-                $this->usuarioSistema->ejecutar(),
+                $data['actor'] ?? $this->usuarioSistema->ejecutar(),
             );
 
-            $lineas = $this->mapearItems($cotizacion);
-            foreach ($lineas['detalles'] as $detalle) {
-                $orden->detalles()->create($this->calculadora->detalle($detalle));
-            }
-            foreach ($lineas['refacciones'] as $refaccion) {
-                $orden->refacciones()->create($this->calculadora->refaccion($refaccion));
-            }
-
-            $resumen = $this->calculadora->resumen($lineas['detalles'], $lineas['refacciones']);
-            $orden->update([
-                'total_cliente' => $resumen['total_cliente'],
-                'utilidad_estimada' => $resumen['utilidad_estimada'],
-            ]);
+            $this->reconciliarLineas($orden, $lineas);
+            $this->recalcularTotalesOrden($orden);
 
             if ($cotizacion->estado !== 'aceptada') {
                 if ($cotizacion->esEditable()) {
@@ -104,6 +117,12 @@ class ConvertirCotizacionEnOrden
                 'notas' => trim(((string) $cotizacion->notas ? $cotizacion->notas."\n\n" : '')
                     ."Convertida en la orden {$orden->folio} por OpenClaw."),
             ]);
+
+            if ($origen !== 'openclaw-cotizacion') {
+                $cotizacion->update([
+                    'notas' => str_replace(' por OpenClaw.', " por {$origenNota}.", (string) $cotizacion->notas),
+                ]);
+            }
 
             return [
                 'orden' => $orden->fresh(['cliente', 'equipo', 'partnerRecepcion']),
@@ -123,26 +142,105 @@ class ConvertirCotizacionEnOrden
         foreach ($cotizacion->items as $item) {
             if ($item->tipo === 'servicio') {
                 $detalles[] = [
+                    'cotizacion_item_id' => $item->id,
                     'servicio_id' => $this->resolverServicioExacto($item),
                     'descripcion' => $item->descripcion,
                     'cantidad' => (int) $item->cantidad,
                     'precio_unitario' => (float) $item->precio_unitario,
-                    'costo_unitario' => (float) $item->costo_unitario,
+                    'costo_unitario' => $item->costo_unitario,
                 ];
 
                 continue;
             }
 
             $refacciones[] = [
+                'cotizacion_item_id' => $item->id,
                 'descripcion' => $item->descripcion,
                 'cantidad' => (int) $item->cantidad,
                 'precio_unitario_cliente' => (float) $item->precio_unitario,
-                'costo_unitario' => (float) $item->costo_unitario,
+                'costo_unitario' => $item->costo_unitario,
                 'notas' => 'Tomado de la cotización '.$cotizacion->folio.' (tipo '.$item->tipo.').',
             ];
         }
 
         return ['detalles' => $detalles, 'refacciones' => $refacciones];
+    }
+
+    /**
+     * A DB unique index protects each destination table. The cross-table
+     * invariant needs this explicit in-memory guard until both types share a
+     * transfer ledger.
+     *
+     * @param  array{detalles: array<int, array<string, mixed>>, refacciones: array<int, array<string, mixed>>}  $lineas
+     */
+    private function validarTrazabilidadLineas(array $lineas): void
+    {
+        $detalles = collect($lineas['detalles'])->pluck('cotizacion_item_id');
+        $refacciones = collect($lineas['refacciones'])->pluck('cotizacion_item_id');
+
+        if ($detalles->intersect($refacciones)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'cotizacion' => 'Una línea de cotización no puede transferirse como servicio y refacción a la vez.',
+            ]);
+        }
+
+    }
+
+    /**
+     * Reconciles each source item independently. A correct existing transfer
+     * is retained, missing lines are copied, and the opposite line type is
+     * always rejected. This is idempotent for both panel replays and Case A.
+     *
+     * @param  array{detalles: array<int, array<string, mixed>>, refacciones: array<int, array<string, mixed>>}  $lineas
+     */
+    private function reconciliarLineas(OrdenServicio $orden, array $lineas): void
+    {
+        foreach ($lineas['detalles'] as $detalle) {
+            $itemId = $detalle['cotizacion_item_id'];
+            if (OrdenServicioRefaccion::query()->where('cotizacion_item_id', $itemId)->exists()) {
+                throw ValidationException::withMessages([
+                    'cotizacion' => 'Una línea de cotización ya está transferida como refacción.',
+                ]);
+            }
+
+            $orden->detalles()->firstOrCreate(
+                ['cotizacion_item_id' => $itemId],
+                $this->calculadora->detalle($detalle),
+            );
+        }
+
+        foreach ($lineas['refacciones'] as $refaccion) {
+            $itemId = $refaccion['cotizacion_item_id'];
+            if (OrdenServicioDetalle::query()->where('cotizacion_item_id', $itemId)->exists()) {
+                throw ValidationException::withMessages([
+                    'cotizacion' => 'Una línea de cotización ya está transferida como servicio.',
+                ]);
+            }
+
+            $orden->refacciones()->firstOrCreate(
+                ['cotizacion_item_id' => $itemId],
+                $this->calculadora->refaccion($refaccion),
+            );
+        }
+    }
+
+    /** Recalculate stored totals from persisted lines without overwriting them. */
+    private function recalcularTotalesOrden(OrdenServicio $orden): void
+    {
+        $orden->load(['detalles', 'refacciones']);
+        $totalServicios = (float) $orden->detalles->sum('subtotal');
+        $totalRefacciones = (float) $orden->refacciones->sum('precio_total_cliente');
+        $costoServicios = (float) $orden->detalles->sum('costo_total');
+        $costoRefacciones = (float) $orden->refacciones->sum('costo_total');
+        $totalCliente = $totalServicios + $totalRefacciones;
+        $costosIncompletos = $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)
+            || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null);
+
+        $orden->update([
+            'total_cliente' => $totalCliente,
+            'utilidad_estimada' => $totalCliente - $costoServicios - $costoRefacciones - (float) $orden->costo_tecnico - (float) $orden->comision_logistica,
+            'costos_incompletos' => $costosIncompletos,
+        ]);
     }
 
     private function resolverServicioExacto(object $item): ?int

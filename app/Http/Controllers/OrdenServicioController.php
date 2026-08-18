@@ -206,7 +206,7 @@ class OrdenServicioController extends Controller
         }
 
         return array_map(function (array $servicio): array {
-            $servicio['costo_unitario'] = 0;
+            $servicio['costo_unitario'] = null;
 
             return $servicio;
         }, $validados);
@@ -223,14 +223,24 @@ class OrdenServicioController extends Controller
             return [];
         }
 
-        return validator(['refacciones' => $refacciones], [
+        $validadas = validator(['refacciones' => $refacciones], [
             'refacciones' => ['array'],
             'refacciones.*.descripcion' => ['required', 'string', 'max:255'],
             'refacciones.*.cantidad' => ['required', 'integer', 'min:1'],
-            'refacciones.*.costo_unitario' => ['required', 'numeric', 'min:0'],
+            'refacciones.*.costo_unitario' => ['nullable', 'numeric', 'min:0'],
             'refacciones.*.precio_unitario_cliente' => ['required', 'numeric', 'min:0'],
             'refacciones.*.notas' => ['nullable', 'string'],
         ])->validate()['refacciones'];
+
+        if ($request->user()->isAdmin()) {
+            return $validadas;
+        }
+
+        return array_map(function (array $refaccion): array {
+            $refaccion['costo_unitario'] = null;
+
+            return $refaccion;
+        }, $validadas);
     }
 
     private function authorizeView(OrdenServicio $orden): void

@@ -31,9 +31,10 @@ class ActualizarCotizacion
             if (! $actor->isAdmin()) {
                 $costosExistentes = $cotizacion->items()->pluck('costo_unitario', 'id');
                 $items = array_map(function (array $item) use ($costosExistentes): array {
-                    $item['costo_unitario'] = isset($costosExistentes[$item['id'] ?? null])
-                        ? (float) $costosExistentes[$item['id']]
-                        : 0;
+                    $itemId = $item['id'] ?? null;
+                    $item['costo_unitario'] = $itemId !== null && $costosExistentes->has($itemId)
+                        ? $costosExistentes->get($itemId)
+                        : null;
 
                     return $item;
                 }, $items);

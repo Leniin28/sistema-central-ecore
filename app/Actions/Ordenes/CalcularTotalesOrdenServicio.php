@@ -12,9 +12,11 @@ class CalcularTotalesOrdenServicio
         $cantidad = (int) $detalle['cantidad'];
         $descripcion = trim((string) ($detalle['descripcion'] ?? ''));
         $precioUnitario = round((float) $detalle['precio_unitario'], 2);
-        $costoUnitario = round((float) ($detalle['costo_unitario'] ?? 0), 2);
+        $costoUnitario = array_key_exists('costo_unitario', $detalle) && $detalle['costo_unitario'] !== null
+            ? round((float) $detalle['costo_unitario'], 2)
+            : null;
 
-        if ($descripcion === '' || $cantidad < 1 || $precioUnitario < 0 || $costoUnitario < 0) {
+        if ($descripcion === '' || $cantidad < 1 || $precioUnitario < 0 || ($costoUnitario !== null && $costoUnitario < 0)) {
             throw ValidationException::withMessages([
                 'servicios' => 'Cada servicio requiere descripción, cantidad mayor a cero y precios o costos no negativos.',
             ]);
@@ -26,7 +28,7 @@ class CalcularTotalesOrdenServicio
             'cantidad' => $cantidad,
             'precio_unitario' => $precioUnitario,
             'costo_unitario' => $costoUnitario,
-            'costo_total' => round($cantidad * $costoUnitario, 2),
+            'costo_total' => $costoUnitario === null ? null : round($cantidad * $costoUnitario, 2),
             'subtotal' => round($cantidad * $precioUnitario, 2),
             'notas' => $detalle['notas'] ?? null,
         ];
@@ -36,9 +38,11 @@ class CalcularTotalesOrdenServicio
     public function refaccion(array $refaccion): array
     {
         $cantidad = (int) $refaccion['cantidad'];
-        $costoUnitario = round((float) $refaccion['costo_unitario'], 2);
+        $costoUnitario = array_key_exists('costo_unitario', $refaccion) && $refaccion['costo_unitario'] !== null
+            ? round((float) $refaccion['costo_unitario'], 2)
+            : null;
         $precioUnitarioCliente = round((float) $refaccion['precio_unitario_cliente'], 2);
-        $costoTotal = round($cantidad * $costoUnitario, 2);
+        $costoTotal = $costoUnitario === null ? null : round($cantidad * $costoUnitario, 2);
         $precioTotalCliente = round($cantidad * $precioUnitarioCliente, 2);
 
         return [
@@ -48,7 +52,9 @@ class CalcularTotalesOrdenServicio
             'precio_unitario_cliente' => $precioUnitarioCliente,
             'costo_total' => $costoTotal,
             'precio_total_cliente' => $precioTotalCliente,
-            'utilidad_refaccion' => round($precioTotalCliente - $costoTotal, 2),
+            // The numeric value uses zero operationally; costo_total remains
+            // NULL so callers can identify that this profitability is partial.
+            'utilidad_refaccion' => round($precioTotalCliente - ($costoTotal ?? 0), 2),
             'notas' => $refaccion['notas'] ?? null,
         ];
     }
@@ -56,7 +62,7 @@ class CalcularTotalesOrdenServicio
     /**
      * @param  array<int, array<string, mixed>>  $detalles
      * @param  array<int, array<string, mixed>>  $refacciones
-     * @return array<string, float>
+     * @return array<string, float|bool>
      */
     public function resumen(array $detalles, array $refacciones, float $costoTecnico = 0, float $comision = 0): array
     {
@@ -70,6 +76,12 @@ class CalcularTotalesOrdenServicio
         $costoRefacciones = (float) $refaccionesCalculadas->sum('costo_total');
         $totalCliente = round($totalServicios + $totalRefacciones, 2);
 
+        $costosIncompletos = $detallesCalculados->contains(
+            fn (array $detalle): bool => $detalle['costo_total'] === null,
+        ) || $refaccionesCalculadas->contains(
+            fn (array $refaccion): bool => $refaccion['costo_total'] === null,
+        );
+
         return [
             'total_servicios' => round($totalServicios, 2),
             'costo_servicios' => round($costoServicios, 2),
@@ -78,6 +90,7 @@ class CalcularTotalesOrdenServicio
             'total_cliente' => $totalCliente,
             'costo_total_interno' => round($costoServicios + $costoRefacciones, 2),
             'utilidad_estimada' => round($totalCliente - $costoServicios - $costoRefacciones - $costoTecnico - $comision, 2),
+            'costos_incompletos' => $costosIncompletos,
         ];
     }
 }

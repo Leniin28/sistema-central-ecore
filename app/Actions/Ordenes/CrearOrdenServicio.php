@@ -25,6 +25,7 @@ class CrearOrdenServicio
             $data = $this->prepararAsignaciones($data, $actor);
             $this->validarEquipo($data);
             $detalles = $this->normalizarDetalles($detalles);
+            [$detalles, $refacciones] = $this->protegerCostosInternos($detalles, $refacciones, $actor);
 
             $orden = OrdenServicio::create([
                 ...$data,
@@ -34,6 +35,7 @@ class CrearOrdenServicio
                 'costo_tecnico' => $data['costo_tecnico'] ?? 0,
                 'comision_logistica' => 0,
                 'utilidad_estimada' => 0,
+                'costos_incompletos' => false,
                 'utilidad_neta' => 0,
                 'fecha_recepcion' => now(),
                 'fecha_entrega' => null,
@@ -60,6 +62,7 @@ class CrearOrdenServicio
             $orden->update([
                 'total_cliente' => $resumen['total_cliente'],
                 'utilidad_estimada' => $resumen['utilidad_estimada'],
+                'costos_incompletos' => $resumen['costos_incompletos'],
             ]);
 
             return $orden->fresh();
@@ -136,6 +139,35 @@ class CrearOrdenServicio
 
             return $detalle;
         }, $detalles);
+    }
+
+    /**
+     * Internal costs may only be captured by an administrator. This guard
+     * belongs in the action because web, reception, and future callers all
+     * create orders through it.
+     *
+     * @param  array<int, array<string, mixed>>  $detalles
+     * @param  array<int, array<string, mixed>>  $refacciones
+     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>}
+     */
+    private function protegerCostosInternos(array $detalles, array $refacciones, User $actor): array
+    {
+        if ($actor->isAdmin()) {
+            return [$detalles, $refacciones];
+        }
+
+        return [
+            array_map(function (array $detalle): array {
+                $detalle['costo_unitario'] = null;
+
+                return $detalle;
+            }, $detalles),
+            array_map(function (array $refaccion): array {
+                $refaccion['costo_unitario'] = null;
+
+                return $refaccion;
+            }, $refacciones),
+        ];
     }
 
     private function generarFolio(): string

@@ -43,6 +43,7 @@ class InternalQuoteController extends Controller
             'items.*.descripcion' => ['required', 'string', 'max:255'],
             'items.*.cantidad' => ['required', 'integer', 'min:1'],
             'items.*.precio_unitario' => ['required', 'numeric', 'min:0'],
+            'items.*.costo_unitario' => ['nullable', 'numeric', 'min:0'],
 
             'descuento' => ['nullable', 'numeric', 'min:0'],
             'anticipo' => ['nullable', 'numeric', 'min:0'],
@@ -237,6 +238,17 @@ class InternalQuoteController extends Controller
         }
 
         // Ya convertida antes (aunque el external_id sea otro): no duplicar.
+        $vinculada = $cotizacion->ordenServicio()->first();
+        if ($vinculada) {
+            $resultado = $accion->ejecutar($cotizacion, $data);
+
+            return $this->respuestaConversion($resultado['cotizacion'], $resultado['orden'], created: false, warnings: [
+                "La cotización {$cotizacion->folio} ya fue convertida en la orden {$vinculada->folio}; no se creó otra.",
+            ]);
+        }
+
+        // Compatibility fallback for legacy rows only. New conversions persist
+        // cotizacion_id and never use notes as their source of truth.
         $convertida = OrdenServicio::query()
             ->where('origen', 'openclaw-cotizacion')
             ->where('notas', 'like', "%la cotización {$cotizacion->folio}%")

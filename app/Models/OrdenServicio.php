@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'folio',
+    'cotizacion_id',
     'external_id',
     'origen',
     'cliente_id',
@@ -22,6 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'costo_tecnico',
     'comision_logistica',
     'utilidad_estimada',
+    'costos_incompletos',
     'utilidad_neta',
     'notas',
     'fecha_recepcion',
@@ -82,6 +84,7 @@ class OrdenServicio extends Model
             'costo_tecnico' => 'decimal:2',
             'comision_logistica' => 'decimal:2',
             'utilidad_estimada' => 'decimal:2',
+            'costos_incompletos' => 'boolean',
             'utilidad_neta' => 'decimal:2',
             'fecha_recepcion' => 'datetime',
             'fecha_entrega' => 'datetime',
@@ -95,6 +98,12 @@ class OrdenServicio extends Model
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(Cliente::class);
+    }
+
+    /** Get the accepted quote that originated this order, when applicable. */
+    public function cotizacion(): BelongsTo
+    {
+        return $this->belongsTo(Cotizacion::class);
     }
 
     /**

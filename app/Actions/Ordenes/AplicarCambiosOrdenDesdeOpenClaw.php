@@ -164,7 +164,7 @@ class AplicarCambiosOrdenDesdeOpenClaw
             $creada = $orden->refacciones()->create($this->calculadora->refaccion([
                 'descripcion' => $descripcion,
                 'cantidad' => $this->cantidad($refaccion['cantidad'] ?? null),
-                'costo_unitario' => $this->numero($refaccion['costo_unitario'] ?? null) ?? 0.0,
+                'costo_unitario' => $this->numero($refaccion['costo_unitario'] ?? null),
                 'precio_unitario_cliente' => $this->numero($refaccion['precio_cliente'] ?? $refaccion['precio'] ?? null) ?? 0.0,
                 'notas' => $refaccion['notas'] ?? null,
             ]));
@@ -172,7 +172,7 @@ class AplicarCambiosOrdenDesdeOpenClaw
             $agregadas[] = [
                 'descripcion' => $creada->descripcion,
                 'cantidad' => (int) $creada->cantidad,
-                'costo_unitario' => (float) $creada->costo_unitario,
+                'costo_unitario' => $creada->costo_unitario === null ? null : (float) $creada->costo_unitario,
                 'precio_unitario_cliente' => (float) $creada->precio_unitario_cliente,
                 'precio_total_cliente' => (float) $creada->precio_total_cliente,
             ];
@@ -209,6 +209,7 @@ class AplicarCambiosOrdenDesdeOpenClaw
         $orden->update([
             'total_cliente' => $resumen['total_cliente'],
             'utilidad_estimada' => $resumen['utilidad_estimada'],
+            'costos_incompletos' => $resumen['costos_incompletos'],
         ]);
     }
 

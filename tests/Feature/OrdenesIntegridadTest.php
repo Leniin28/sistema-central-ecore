@@ -108,3 +108,37 @@ test('socio tecnico no puede acceder a nueva recepcion', function () {
     $this->actingAs($tecnico)->get('/admin/recepciones/create')->assertForbidden();
     $this->actingAs($tecnico)->get('/logistica/recepciones/create')->assertForbidden();
 });
+
+test('socio logistico no puede inyectar costo interno en una refaccion', function () {
+    $datos = datosOrden();
+    $logistico = User::factory()->create([
+        'role' => 'socio_logistico',
+        'partner_id' => $datos['logistica']->id,
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($logistico)
+        ->post(route('logistica.ordenes-servicio.store'), [
+            'cliente_id' => $datos['cliente']->id,
+            'equipo_id' => $datos['equipo']->id,
+            'tipo_recepcion' => 'directo',
+            'servicios' => [[
+                'servicio_id' => $datos['servicio']->id,
+                'descripcion' => $datos['servicio']->nombre,
+                'cantidad' => 1,
+                'precio_unitario' => 300,
+            ]],
+            'refacciones' => [[
+                'descripcion' => 'Refacción con costo inyectado',
+                'cantidad' => 1,
+                'costo_unitario' => 999999,
+                'precio_unitario_cliente' => 100,
+            ]],
+        ])
+        ->assertRedirect();
+
+    $refaccion = OrdenServicio::latest('id')->firstOrFail()->refacciones()->sole();
+
+    expect($refaccion->costo_unitario)->toBeNull()
+        ->and($refaccion->costo_total)->toBeNull();
+});

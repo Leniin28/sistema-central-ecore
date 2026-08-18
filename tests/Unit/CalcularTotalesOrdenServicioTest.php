@@ -46,3 +46,28 @@ test('calcula los importes de una refaccion en el servidor', function () {
         'utilidad_refaccion' => 499.5,
     ]);
 });
+
+test('preserva costo desconocido y señala utilidad incompleta', function () {
+    $calculadora = new CalcularTotalesOrdenServicio;
+
+    $resumen = $calculadora->resumen(
+        [[
+            'descripcion' => 'Diagnóstico',
+            'cantidad' => 1,
+            'precio_unitario' => 500,
+            'costo_unitario' => null,
+        ]],
+        [],
+    );
+
+    expect($calculadora->detalle([
+        'descripcion' => 'Diagnóstico',
+        'cantidad' => 1,
+        'precio_unitario' => 500,
+        'costo_unitario' => null,
+    ]))->toMatchArray([
+        'costo_unitario' => null,
+        'costo_total' => null,
+    ])->and($resumen['utilidad_estimada'])->toBe(500.0)
+        ->and($resumen['costos_incompletos'])->toBeTrue();
+});
