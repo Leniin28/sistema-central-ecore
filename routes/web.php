@@ -38,6 +38,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('movimientos-financieros.index');
         Route::post('ordenes-servicio/{ordenServicio}/estado', [OrdenServicioEstadoController::class, 'store'])
             ->name('ordenes-servicio.estado.store');
+        Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion', [OrdenServicioController::class, 'notaRecepcion'])
+            ->name('ordenes-servicio.nota-recepcion');
+        Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion/pdf', [OrdenServicioController::class, 'notaRecepcionPdf'])
+            ->name('ordenes-servicio.nota-recepcion.pdf');
+        Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion/png', [OrdenServicioController::class, 'notaRecepcionPng'])
+            ->name('ordenes-servicio.nota-recepcion.png');
         Route::resource('ordenes-servicio', OrdenServicioController::class)
             ->parameters(['ordenes-servicio' => 'ordenServicio']);
         Route::resource('categorias-servicio', CategoriaServicioController::class)
@@ -70,6 +76,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->only(['index', 'create', 'store', 'show']);
         Route::post('ordenes-servicio/{ordenServicio}/estado', [OrdenServicioEstadoController::class, 'store'])
             ->name('ordenes-servicio.estado.store');
+        Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion', [OrdenServicioController::class, 'notaRecepcion'])
+            ->name('ordenes-servicio.nota-recepcion');
+        Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion/pdf', [OrdenServicioController::class, 'notaRecepcionPdf'])
+            ->name('ordenes-servicio.nota-recepcion.pdf');
+        Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion/png', [OrdenServicioController::class, 'notaRecepcionPng'])
+            ->name('ordenes-servicio.nota-recepcion.png');
         Route::resource('ordenes-servicio', OrdenServicioController::class)
             ->only(['index', 'create', 'store', 'show'])
             ->parameters(['ordenes-servicio' => 'ordenServicio']);
@@ -92,6 +104,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::post('ordenes-servicio/{ordenServicio}/estado', [OrdenServicioEstadoController::class, 'store'])
             ->name('ordenes-servicio.estado.store');
+        Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion', [OrdenServicioController::class, 'notaRecepcion'])
+            ->name('ordenes-servicio.nota-recepcion');
+        Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion/pdf', [OrdenServicioController::class, 'notaRecepcionPdf'])
+            ->name('ordenes-servicio.nota-recepcion.pdf');
+        Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion/png', [OrdenServicioController::class, 'notaRecepcionPng'])
+            ->name('ordenes-servicio.nota-recepcion.png');
         Route::resource('ordenes-servicio', OrdenServicioController::class)
             ->only(['index', 'show'])
             ->parameters(['ordenes-servicio' => 'ordenServicio']);

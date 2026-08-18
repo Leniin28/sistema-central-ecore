@@ -9,9 +9,12 @@ use App\Models\Equipo;
 use App\Models\OrdenServicio;
 use App\Models\Partner;
 use App\Models\Servicio;
+use App\Services\ExportarNotaRecepcionPdf;
+use App\Services\ExportarNotaRecepcionPng;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -79,6 +82,41 @@ class OrdenServicioController extends Controller
             'orden' => $ordenServicio,
             'routePrefix' => $this->routePrefix(),
             'estadosDisponibles' => $this->estadosDisponibles($ordenServicio),
+        ]);
+    }
+
+    public function notaRecepcion(OrdenServicio $ordenServicio): View
+    {
+        $this->authorizeView($ordenServicio);
+        $ordenServicio->loadMissing(['cliente', 'equipo']);
+
+        return view('ordenes-servicio.nota-recepcion', [
+            'orden' => $ordenServicio,
+            'negocio' => config('negocio'),
+            'routePrefix' => $this->routePrefix(),
+        ]);
+    }
+
+    public function notaRecepcionPdf(OrdenServicio $ordenServicio, ExportarNotaRecepcionPdf $exportador): Response
+    {
+        $this->authorizeView($ordenServicio);
+
+        return $exportador->generar($ordenServicio)->download($exportador->nombreArchivo($ordenServicio));
+    }
+
+    public function notaRecepcionPng(OrdenServicio $ordenServicio, ExportarNotaRecepcionPng $exportador): Response
+    {
+        $this->authorizeView($ordenServicio);
+
+        try {
+            $imagen = $exportador->generar($ordenServicio);
+        } catch (\RuntimeException $exception) {
+            abort(503, $exception->getMessage());
+        }
+
+        return response($imagen, 200, [
+            'Content-Type' => 'image/png',
+            'Content-Disposition' => 'attachment; filename="'.$exportador->nombreArchivo($ordenServicio).'"',
         ]);
     }
 
