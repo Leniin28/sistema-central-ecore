@@ -5,11 +5,38 @@ namespace App\Http\Controllers;
 use App\Models\Cliente;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ClienteController extends Controller
 {
+    /**
+     * Search clients for operational capture forms.
+     */
+    public function buscar(Request $request): JsonResponse
+    {
+        $termino = trim((string) $request->input('q'));
+
+        $clientes = Cliente::query()
+            ->select(['id', 'nombre', 'telefono'])
+            ->when($termino !== '', function ($query) use ($termino) {
+                $query->where(function ($query) use ($termino) {
+                    $query->where('nombre', 'like', "%{$termino}%")
+                        ->orWhere('telefono', 'like', "%{$termino}%");
+                });
+            })
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn (Cliente $cliente) => [
+                'value' => (string) $cliente->id,
+                'label' => trim($cliente->nombre.' · '.$cliente->telefono),
+            ]);
+
+        return response()->json(['data' => $clientes]);
+    }
+
     /**
      * Display a listing of clients.
      */

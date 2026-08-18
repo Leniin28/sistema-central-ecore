@@ -25,6 +25,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('recepciones/create', [RecepcionController::class, 'create'])->name('recepciones.create');
         Route::post('recepciones', [RecepcionController::class, 'store'])->name('recepciones.store');
 
+        Route::get('clientes/buscar', [ClienteController::class, 'buscar'])->name('clientes.buscar');
+        Route::get('clientes/{cliente}/equipos/buscar', [EquipoController::class, 'buscar'])->name('clientes.equipos.buscar');
+
         Route::resource('clientes', ClienteController::class);
         Route::resource('equipos', EquipoController::class);
         Route::get('movimientos-financieros/create', [MovimientoFinancieroController::class, 'create'])
@@ -57,6 +60,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('dashboard', LogisticaDashboardController::class)->name('dashboard');
         Route::get('recepciones/create', [RecepcionController::class, 'create'])->name('recepciones.create');
         Route::post('recepciones', [RecepcionController::class, 'store'])->name('recepciones.store');
+
+        Route::get('clientes/buscar', [ClienteController::class, 'buscar'])->name('clientes.buscar');
+        Route::get('clientes/{cliente}/equipos/buscar', [EquipoController::class, 'buscar'])->name('clientes.equipos.buscar');
 
         Route::resource('clientes', ClienteController::class)
             ->only(['index', 'create', 'store', 'show']);

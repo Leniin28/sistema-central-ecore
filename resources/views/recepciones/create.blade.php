@@ -48,13 +48,15 @@
                     </div>
 
                     <div class="mt-5" data-mode-panel="cliente-existente">
-                        <label for="cliente_id" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Cliente registrado</label>
-                        <select id="cliente_id" name="cliente_id" class="mt-1 block w-full rounded-md border-neutral-300 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
-                            <option value="">Selecciona un cliente</option>
-                            @foreach ($clientes as $cliente)
-                                <option value="{{ $cliente->id }}" @selected((int) old('cliente_id') === $cliente->id)>{{ $cliente->nombre }} · {{ $cliente->telefono }}</option>
-                            @endforeach
-                        </select>
+                        <x-searchable-select
+                            id="cliente_id"
+                            name="cliente_id"
+                            label="Cliente registrado"
+                            :url="route($routePrefix.'.clientes.buscar')"
+                            :selected-id="$clienteSeleccionado?->id"
+                            :selected-label="$clienteSeleccionado ? $clienteSeleccionado->nombre.' · '.$clienteSeleccionado->telefono : null"
+                            required
+                        />
                         @error('cliente_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                     </div>
 
@@ -104,15 +106,16 @@
                     </div>
 
                     <div class="mt-5" data-mode-panel="equipo-existente">
-                        <label for="equipo_id" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Equipo registrado</label>
-                        <select id="equipo_id" name="equipo_id" class="mt-1 block w-full rounded-md border-neutral-300 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
-                            <option value="">Selecciona primero un cliente</option>
-                            @foreach ($equipos as $equipo)
-                                <option value="{{ $equipo->id }}" data-cliente="{{ $equipo->cliente_id }}" @selected((int) old('equipo_id') === $equipo->id)>
-                                    {{ $equipo->tipo_equipo }} · {{ $equipo->marca }} {{ $equipo->modelo }}{{ $equipo->numero_serie ? ' · '.$equipo->numero_serie : '' }}
-                                </option>
-                            @endforeach
-                        </select>
+                        <x-searchable-select
+                            id="equipo_id"
+                            name="equipo_id"
+                            label="Equipo registrado"
+                            :url="str_replace('__CLIENTE__', '{cliente}', route($routePrefix.'.clientes.equipos.buscar', '__CLIENTE__'))"
+                            :selected-id="$equipoSeleccionado?->id"
+                            :selected-label="$equipoSeleccionado ? $equipoSeleccionado->tipo_equipo.' · '.$equipoSeleccionado->marca.' '.$equipoSeleccionado->modelo : null"
+                            depends-on="cliente_id"
+                            required
+                        />
                         @error('equipo_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                     </div>
 
@@ -210,18 +213,6 @@
                 }
             };
 
-            const filterEquipment = () => {
-                const clientId = document.getElementById('cliente_id')?.value;
-                const select = document.getElementById('equipo_id');
-                if (!select) return;
-                [...select.options].forEach((option, index) => {
-                    if (index === 0) return;
-                    option.hidden = !clientId || option.dataset.cliente !== clientId;
-                    option.disabled = option.hidden;
-                });
-                if (select.selectedOptions[0]?.disabled) select.value = '';
-            };
-
             const calculate = () => {
                 let services = 0, parts = 0, costs = 0;
                 form.querySelectorAll('[data-service-row]').forEach(row => {
@@ -248,7 +239,6 @@
 
             form.addEventListener('change', event => {
                 if (event.target.matches('input[name$="_modo"]')) syncModes();
-                if (event.target.id === 'cliente_id') filterEquipment();
                 if (event.target.matches('[data-service-select]')) {
                     const row = event.target.closest('[data-service-row]');
                     const price = row.querySelector('[data-service-price]');
@@ -257,7 +247,7 @@
                 calculate();
             });
             form.addEventListener('input', calculate);
-            syncModes(); filterEquipment(); calculate();
+            syncModes(); calculate();
         });
     </script>
 </x-layouts::app>

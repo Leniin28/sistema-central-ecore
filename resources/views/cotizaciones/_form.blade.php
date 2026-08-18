@@ -24,39 +24,31 @@
 <div class="grid gap-5">
     <div class="grid gap-5 sm:grid-cols-2">
         <div>
-            <label for="cliente_id" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Cliente</label>
-            <select
+            <x-searchable-select
                 id="cliente_id"
                 name="cliente_id"
-                class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                label="Cliente"
+                :url="route($routePrefix.'.clientes.buscar')"
+                :selected-id="$clienteSeleccionado?->id"
+                :selected-label="$clienteSeleccionado ? $clienteSeleccionado->nombre.' · '.$clienteSeleccionado->telefono : null"
                 required
-            >
-                <option value="">Selecciona un cliente</option>
-                @foreach ($clientes as $cliente)
-                    <option value="{{ $cliente->id }}" @selected((int) old('cliente_id', $cotizacion->cliente_id) === $cliente->id)>
-                        {{ $cliente->nombre }} - {{ $cliente->telefono }}
-                    </option>
-                @endforeach
-            </select>
+            />
+            <a href="{{ route($routePrefix.'.clientes.create') }}" class="mt-2 inline-block text-sm text-neutral-600 underline hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white">Registrar nuevo cliente</a>
             @error('cliente_id')
                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
             @enderror
         </div>
 
         <div>
-            <label for="equipo_id" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Equipo (opcional)</label>
-            <select
+            <x-searchable-select
                 id="equipo_id"
                 name="equipo_id"
-                class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-            >
-                <option value="">Sin equipo asignado</option>
-                @foreach ($equipos as $equipo)
-                    <option value="{{ $equipo->id }}" @selected((int) old('equipo_id', $cotizacion->equipo_id) === $equipo->id)>
-                        {{ $equipo->cliente?->nombre }} - {{ $equipo->tipo_equipo }} {{ $equipo->marca }} {{ $equipo->modelo }}
-                    </option>
-                @endforeach
-            </select>
+                label="Equipo (opcional)"
+                :url="str_replace('__CLIENTE__', '{cliente}', route($routePrefix.'.clientes.equipos.buscar', '__CLIENTE__'))"
+                :selected-id="$equipoSeleccionado?->id"
+                :selected-label="$equipoSeleccionado ? $equipoSeleccionado->tipo_equipo.' · '.$equipoSeleccionado->marca.' '.$equipoSeleccionado->modelo : null"
+                depends-on="cliente_id"
+            />
             @error('equipo_id')
                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
             @enderror

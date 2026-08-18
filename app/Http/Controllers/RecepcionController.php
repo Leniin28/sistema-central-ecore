@@ -18,8 +18,8 @@ class RecepcionController extends Controller
         abort_if(auth()->user()->hasRole('socio_tecnico'), 403);
 
         return view('recepciones.create', [
-            'clientes' => Cliente::query()->orderBy('nombre')->get(),
-            'equipos' => Equipo::query()->with('cliente')->orderBy('marca')->orderBy('modelo')->get(),
+            'clienteSeleccionado' => Cliente::find(old('cliente_id')),
+            'equipoSeleccionado' => Equipo::find(old('equipo_id')),
             'servicios' => Servicio::query()->with('categoriaServicio')->where('activo', true)->orderBy('nombre')->get(),
             'partnersRecepcion' => Partner::query()->where('tipo_socio', 'logistico')->where('activo', true)->orderBy('nombre')->get(),
             'partnersTecnicos' => Partner::query()->where('tipo_socio', 'tecnico')->where('activo', true)->orderBy('nombre')->get(),

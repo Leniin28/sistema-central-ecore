@@ -85,7 +85,7 @@ class CotizacionController extends Controller
 
         return view('cotizaciones.edit', [
             'cotizacion' => $cotizacion,
-            ...$this->formData(),
+            ...$this->formData($cotizacion),
         ]);
     }
 
@@ -222,11 +222,14 @@ class CotizacionController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function formData(): array
+    private function formData(?Cotizacion $cotizacion = null): array
     {
+        $clienteId = old('cliente_id', $cotizacion?->cliente_id);
+        $equipoId = old('equipo_id', $cotizacion?->equipo_id);
+
         return [
-            'clientes' => Cliente::orderBy('nombre')->get(['id', 'nombre', 'telefono']),
-            'equipos' => Equipo::with('cliente:id,nombre')->orderBy('tipo_equipo')->get(),
+            'clienteSeleccionado' => $clienteId ? Cliente::find($clienteId) : null,
+            'equipoSeleccionado' => $equipoId ? Equipo::find($equipoId) : null,
             'routePrefix' => $this->routePrefix(),
         ];
     }

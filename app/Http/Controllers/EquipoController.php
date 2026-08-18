@@ -6,11 +6,44 @@ use App\Models\Cliente;
 use App\Models\Equipo;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class EquipoController extends Controller
 {
+    /**
+     * Search a client's equipment for operational capture forms.
+     */
+    public function buscar(Request $request, Cliente $cliente): JsonResponse
+    {
+        $termino = trim((string) $request->input('q'));
+
+        $equipos = $cliente->equipos()
+            ->select(['id', 'tipo_equipo', 'marca', 'modelo', 'numero_serie'])
+            ->when($termino !== '', function ($query) use ($termino) {
+                $query->where(function ($query) use ($termino) {
+                    $query->where('tipo_equipo', 'like', "%{$termino}%")
+                        ->orWhere('marca', 'like', "%{$termino}%")
+                        ->orWhere('modelo', 'like', "%{$termino}%")
+                        ->orWhere('numero_serie', 'like', "%{$termino}%");
+                });
+            })
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn (Equipo $equipo) => [
+                'value' => (string) $equipo->id,
+                'label' => trim(implode(' · ', array_filter([
+                    $equipo->tipo_equipo,
+                    trim($equipo->marca.' '.$equipo->modelo),
+                    $equipo->numero_serie,
+                ]))),
+            ]);
+
+        return response()->json(['data' => $equipos]);
+    }
+
     /**
      * Display a listing of equipment.
      */
