@@ -184,20 +184,32 @@ class OrdenServicioController extends Controller
     private function validatedDetalles(Request $request): array
     {
         $servicios = collect($request->input('servicios', []))
-            ->filter(fn ($row): bool => is_array($row) && filled($row['servicio_id'] ?? null))
+            ->filter(fn ($row): bool => is_array($row) && (filled($row['servicio_id'] ?? null) || filled($row['descripcion'] ?? null)))
             ->values()->all();
 
         if ($servicios === []) {
             throw ValidationException::withMessages(['servicios' => 'Agrega al menos un servicio a la orden.']);
         }
 
-        return validator(['servicios' => $servicios], [
+        $validados = validator(['servicios' => $servicios], [
             'servicios' => ['required', 'array', 'min:1'],
-            'servicios.*.servicio_id' => ['required', 'exists:servicios,id'],
+            'servicios.*.servicio_id' => ['nullable', 'exists:servicios,id'],
+            'servicios.*.descripcion' => ['required', 'string', 'max:255'],
             'servicios.*.cantidad' => ['required', 'integer', 'min:1'],
             'servicios.*.precio_unitario' => ['required', 'numeric', 'min:0'],
+            'servicios.*.costo_unitario' => ['nullable', 'numeric', 'min:0'],
             'servicios.*.notas' => ['nullable', 'string'],
         ])->validate()['servicios'];
+
+        if ($request->user()->isAdmin()) {
+            return $validados;
+        }
+
+        return array_map(function (array $servicio): array {
+            $servicio['costo_unitario'] = 0;
+
+            return $servicio;
+        }, $validados);
     }
 
     /** @return array<int, array<string, mixed>> */

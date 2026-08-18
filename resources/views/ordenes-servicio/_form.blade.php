@@ -11,8 +11,10 @@
         $servicioRows = $orden->exists
             ? $orden->detalles->map(fn ($detalle) => [
                 'servicio_id' => $detalle->servicio_id,
+                'descripcion' => $detalle->descripcion,
                 'cantidad' => $detalle->cantidad,
                 'precio_unitario' => $detalle->precio_unitario,
+                'costo_unitario' => $detalle->costo_unitario,
                 'notas' => $detalle->notas,
             ])->values()->all()
             : [];
@@ -205,16 +207,16 @@
         <div class="mt-5 grid gap-4">
             @foreach ($servicioRows as $index => $row)
                 <div class="grid gap-3 rounded-md border border-neutral-200 p-4 dark:border-neutral-700 lg:grid-cols-12">
-                    <div class="lg:col-span-5">
+                    <div class="lg:col-span-2">
                         <label for="servicios_{{ $index }}_servicio_id" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Servicio</label>
                         <select
                             id="servicios_{{ $index }}_servicio_id"
                             name="servicios[{{ $index }}][servicio_id]"
                             class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
                         >
-                            <option value="">Selecciona un servicio</option>
+                            <option value="">Servicio del catálogo (opcional)</option>
                             @foreach ($servicios as $servicio)
-                                <option value="{{ $servicio->id }}" data-price="{{ $servicio->precio_base }}" @selected((int) ($row['servicio_id'] ?? 0) === $servicio->id)>
+                                <option value="{{ $servicio->id }}" data-name="{{ $servicio->nombre }}" data-price="{{ $servicio->precio_base }}" @selected((int) ($row['servicio_id'] ?? 0) === $servicio->id)>
                                     {{ $servicio->nombre }} - ${{ number_format($servicio->precio_base, 2) }}
                                 </option>
                             @endforeach
@@ -224,7 +226,22 @@
                         @enderror
                     </div>
 
-                    <div class="lg:col-span-2">
+                    <div class="lg:col-span-3">
+                        <label for="servicios_{{ $index }}_descripcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Descripción vendida</label>
+                        <input
+                            id="servicios_{{ $index }}_descripcion"
+                            name="servicios[{{ $index }}][descripcion]"
+                            type="text"
+                            maxlength="255"
+                            value="{{ $row['descripcion'] ?? '' }}"
+                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                        >
+                        @error("servicios.$index.descripcion")
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="lg:col-span-1">
                         <label for="servicios_{{ $index }}_cantidad" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Cantidad</label>
                         <input
                             id="servicios_{{ $index }}_cantidad"
@@ -238,6 +255,24 @@
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                         @enderror
                     </div>
+
+                    @if (auth()->user()->isAdmin())
+                        <div class="lg:col-span-2">
+                            <label for="servicios_{{ $index }}_costo_unitario" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Costo interno unitario</label>
+                            <input
+                                id="servicios_{{ $index }}_costo_unitario"
+                                name="servicios[{{ $index }}][costo_unitario]"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value="{{ $row['costo_unitario'] ?? '' }}"
+                                class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                            >
+                            @error("servicios.$index.costo_unitario")
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    @endif
 
                     <div class="lg:col-span-2">
                         <label for="servicios_{{ $index }}_precio_unitario" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Precio unitario</label>
@@ -255,7 +290,7 @@
                         @enderror
                     </div>
 
-                    <div class="lg:col-span-3">
+                    <div class="lg:col-span-2">
                         <label for="servicios_{{ $index }}_notas" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Notas</label>
                         <input
                             id="servicios_{{ $index }}_notas"
@@ -406,9 +441,9 @@
         const money = value => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value || 0);
         const calculate = () => {
             let services = 0, parts = 0, costs = 0;
-            form.querySelectorAll('select[name^="servicios"][name$="[servicio_id]"]').forEach(select => {
-                if (!select.value) return;
-                const index = select.name.match(/\[(\d+)\]/)[1];
+            form.querySelectorAll('input[name^="servicios"][name$="[descripcion]"]').forEach(input => {
+                if (!input.value.trim()) return;
+                const index = input.name.match(/\[(\d+)\]/)[1];
                 const quantity = Number(form.querySelector(`[name="servicios[${index}][cantidad]"]`)?.value) || 0;
                 const price = Number(form.querySelector(`[name="servicios[${index}][precio_unitario]"]`)?.value) || 0;
                 services += quantity * price;
@@ -430,6 +465,8 @@
                 const index = event.target.name.match(/\[(\d+)\]/)[1];
                 const price = form.querySelector(`[name="servicios[${index}][precio_unitario]"]`);
                 if (event.target.value && !price.value) price.value = event.target.selectedOptions[0].dataset.price || '';
+                const description = form.querySelector(`[name="servicios[${index}][descripcion]"]`);
+                if (event.target.value && description && !description.value) description.value = event.target.selectedOptions[0].dataset.name || '';
             }
             calculate();
         });

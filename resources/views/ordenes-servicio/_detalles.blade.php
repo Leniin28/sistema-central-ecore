@@ -26,7 +26,7 @@
                 <tbody class="divide-y divide-neutral-200 bg-white dark:divide-neutral-700 dark:bg-neutral-800">
                     @forelse ($orden->detalles as $detalle)
                         <tr>
-                            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-neutral-900 dark:text-neutral-100">{{ $detalle->servicio?->nombre ?? 'Sin servicio' }}</td>
+                            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-neutral-900 dark:text-neutral-100">{{ $detalle->descripcion ?? $detalle->servicio?->nombre ?? 'Sin servicio' }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{{ $detalle->servicio?->categoriaServicio?->nombre ?? 'Sin categoría' }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{{ $detalle->cantidad }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">${{ number_format($detalle->precio_unitario, 2) }}</td>

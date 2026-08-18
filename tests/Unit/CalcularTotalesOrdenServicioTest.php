@@ -8,6 +8,7 @@ test('calcula servicios refacciones y utilidad estimada', function () {
     $resumen = $calculadora->resumen(
         [[
             'servicio_id' => 1,
+            'descripcion' => 'Servicio de prueba',
             'cantidad' => 2,
             'precio_unitario' => 300,
             'notas' => null,

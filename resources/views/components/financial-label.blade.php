@@ -14,6 +14,7 @@
         'pago_socio_tecnico' => 'Pago socio técnico',
         'inversion_publicitaria' => 'Inversión publicitaria',
         'refaccion' => 'Refacción',
+        'servicio' => 'Costo de servicio',
         'gasto_operativo' => 'Gasto operativo',
         'gasolina' => 'Gasolina',
         'transporte' => 'Transporte',

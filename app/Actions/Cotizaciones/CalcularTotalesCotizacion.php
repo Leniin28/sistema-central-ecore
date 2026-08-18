@@ -12,7 +12,9 @@ class CalcularTotalesCotizacion
     {
         $tipo = (string) ($item['tipo'] ?? 'otro');
         $cantidad = (int) $item['cantidad'];
+        $descripcion = trim((string) ($item['descripcion'] ?? ''));
         $precioUnitario = round((float) $item['precio_unitario'], 2);
+        $costoUnitario = round((float) ($item['costo_unitario'] ?? 0), 2);
 
         if (! in_array($tipo, CotizacionItem::TIPOS, true)) {
             throw ValidationException::withMessages([
@@ -20,17 +22,20 @@ class CalcularTotalesCotizacion
             ]);
         }
 
-        if ($cantidad < 1 || $precioUnitario < 0) {
+        if ($descripcion === '' || $cantidad < 1 || $precioUnitario < 0 || $costoUnitario < 0) {
             throw ValidationException::withMessages([
-                'items' => 'Las cantidades deben ser mayores a cero y los precios no pueden ser negativos.',
+                'items' => 'Cada concepto requiere descripción, cantidad mayor a cero y precios o costos no negativos.',
             ]);
         }
 
         return [
             'tipo' => $tipo,
-            'descripcion' => (string) $item['descripcion'],
+            'servicio_id' => $item['servicio_id'] ?? null,
+            'descripcion' => $descripcion,
             'cantidad' => $cantidad,
             'precio_unitario' => $precioUnitario,
+            'costo_unitario' => $costoUnitario,
+            'costo_total' => round($cantidad * $costoUnitario, 2),
             'subtotal' => round($cantidad * $precioUnitario, 2),
         ];
     }

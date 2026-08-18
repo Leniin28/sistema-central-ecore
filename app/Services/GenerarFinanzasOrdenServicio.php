@@ -24,11 +24,12 @@ class GenerarFinanzasOrdenServicio
                 ]);
             }
 
-            $orden->loadMissing(['partnerRecepcion', 'partnerTecnico', 'refacciones']);
+            $orden->loadMissing(['partnerRecepcion', 'partnerTecnico', 'detalles', 'refacciones']);
             $totalCliente = (float) $orden->total_cliente;
             $comisionLogistica = (float) ($orden->partnerRecepcion?->comision_fija ?? 0);
             $costoTecnico = (float) $orden->costo_tecnico;
             $totalCostoRefacciones = (float) $orden->refacciones->sum('costo_total');
+            $totalCostoServicios = (float) $orden->detalles->sum('costo_total');
 
             $this->crearMovimiento($orden, 'ingreso', 'reparacion', $totalCliente, null, 'Ingreso por orden '.$orden->folio);
 
@@ -68,9 +69,25 @@ class GenerarFinanzasOrdenServicio
                 );
             }
 
+            foreach ($orden->detalles as $detalle) {
+                if ((float) $detalle->costo_total <= 0) {
+                    continue;
+                }
+
+                $this->crearMovimiento(
+                    $orden,
+                    'egreso',
+                    'servicio',
+                    (float) $detalle->costo_total,
+                    null,
+                    'Costo interno de servicio '.$detalle->descripcion.' para orden '.$orden->folio,
+                );
+            }
+
             $orden->update([
                 'comision_logistica' => $comisionLogistica,
-                'utilidad_neta' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoRefacciones,
+                'utilidad_estimada' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
+                'utilidad_neta' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
                 'finanzas_generadas' => true,
             ]);
         });

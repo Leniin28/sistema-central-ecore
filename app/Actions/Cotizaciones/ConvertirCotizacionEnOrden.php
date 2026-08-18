@@ -4,34 +4,30 @@ namespace App\Actions\Cotizaciones;
 
 use App\Actions\OpenClaw\ObtenerUsuarioSistema;
 use App\Actions\OpenClaw\ResolverPartnerLogistico;
-use App\Actions\Ordenes\AplicarCambiosOrdenDesdeOpenClaw;
+use App\Actions\Ordenes\CalcularTotalesOrdenServicio;
 use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cotizacion;
 use App\Models\Equipo;
 use App\Models\OrdenServicio;
+use App\Models\Servicio;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Converts an accepted quote into a service order from the internal API
- * (OpenClaw). Reuses the real order flow ({@see CrearOrdenServicio} + the same
- * system actor) and the safe line mapper ({@see AplicarCambiosOrdenDesdeOpenClaw}):
- * quote items of type servicio must match the catalog to become billable lines
- * (otherwise warning + note), while refaccion/producto/otro items become free
- * text part lines — nothing is invented into the catalog. The schema has no
- * cotizacion_id on orders, so the link lives in both notes; the quote is moved
- * to `aceptada` and the order is idempotent by external_id.
+ * Converts an accepted quote into an order. Quote conversion deliberately does
+ * not use the OpenClaw /changes matcher: an accepted quote is the commercial
+ * source of truth and its sold lines may be ad-hoc.
  */
 class ConvertirCotizacionEnOrden
 {
     public function __construct(
         private CrearOrdenServicio $crearOrden,
-        private AplicarCambiosOrdenDesdeOpenClaw $aplicarCambios,
+        private CalcularTotalesOrdenServicio $calculadora,
         private ObtenerUsuarioSistema $usuarioSistema,
         private ResolverPartnerLogistico $resolverPartner,
     ) {}
 
     /**
-     * @param  array<string, mixed>  $data  Server-validated payload.
+     * @param  array<string, mixed>  $data
      * @return array{orden: OrdenServicio, cotizacion: Cotizacion, created: bool, warnings: array<int, string>}
      */
     public function ejecutar(Cotizacion $cotizacion, array $data): array
@@ -40,7 +36,6 @@ class ConvertirCotizacionEnOrden
             $cotizacion = Cotizacion::query()->lockForUpdate()->findOrFail($cotizacion->id);
             $cotizacion->loadMissing(['cliente', 'equipo', 'items']);
 
-            // Idempotencia: mismo external_id → misma orden, sin duplicar.
             if (! empty($data['external_id'])) {
                 $existente = OrdenServicio::query()->where('external_id', $data['external_id'])->first();
 
@@ -57,7 +52,6 @@ class ConvertirCotizacionEnOrden
             $warnings = [];
             $equipo = $this->resolverEquipo($cotizacion, $data, $warnings);
             $partner = $this->resolverPartnerLogistico($data, $warnings);
-
             $recepcion = $data['recepcion'] ?? [];
             $falla = trim((string) ($recepcion['falla_reportada'] ?? ''));
             $bloques = [
@@ -84,11 +78,20 @@ class ConvertirCotizacionEnOrden
                 $this->usuarioSistema->ejecutar(),
             );
 
-            // Items → líneas con las mismas reglas seguras del endpoint /changes.
-            $cambios = $this->aplicarCambios->ejecutar($orden, $this->mapearItems($cotizacion), null);
-            $warnings = [...$warnings, ...$cambios['warnings']];
+            $lineas = $this->mapearItems($cotizacion);
+            foreach ($lineas['detalles'] as $detalle) {
+                $orden->detalles()->create($this->calculadora->detalle($detalle));
+            }
+            foreach ($lineas['refacciones'] as $refaccion) {
+                $orden->refacciones()->create($this->calculadora->refaccion($refaccion));
+            }
 
-            // Marcar la cotización como aceptada (solo si aún no lo está).
+            $resumen = $this->calculadora->resumen($lineas['detalles'], $lineas['refacciones']);
+            $orden->update([
+                'total_cliente' => $resumen['total_cliente'],
+                'utilidad_estimada' => $resumen['utilidad_estimada'],
+            ]);
+
             if ($cotizacion->estado !== 'aceptada') {
                 if ($cotizacion->esEditable()) {
                     $cotizacion->update(['estado' => 'aceptada']);
@@ -97,14 +100,13 @@ class ConvertirCotizacionEnOrden
                 }
             }
 
-            // El esquema no tiene FK orden↔cotización: se documenta en ambas notas.
             $cotizacion->update([
                 'notas' => trim(((string) $cotizacion->notas ? $cotizacion->notas."\n\n" : '')
-                    ."Convertida en la orden {$cambios['orden']->folio} por OpenClaw."),
+                    ."Convertida en la orden {$orden->folio} por OpenClaw."),
             ]);
 
             return [
-                'orden' => $cambios['orden']->loadMissing(['cliente', 'equipo', 'partnerRecepcion']),
+                'orden' => $orden->fresh(['cliente', 'equipo', 'partnerRecepcion']),
                 'cotizacion' => $cotizacion->fresh(),
                 'created' => true,
                 'warnings' => $warnings,
@@ -112,24 +114,20 @@ class ConvertirCotizacionEnOrden
         });
     }
 
-    /**
-     * Quote items to /changes-style ops: servicios go through the catalog match
-     * (warning + note when unresolved), everything else becomes a part line with
-     * the quoted price (cost unknown → 0, panel captures it later).
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array{detalles: array<int, array<string, mixed>>, refacciones: array<int, array<string, mixed>>} */
     private function mapearItems(Cotizacion $cotizacion): array
     {
-        $servicios = [];
+        $detalles = [];
         $refacciones = [];
 
         foreach ($cotizacion->items as $item) {
             if ($item->tipo === 'servicio') {
-                $servicios[] = [
+                $detalles[] = [
+                    'servicio_id' => $this->resolverServicioExacto($item),
                     'descripcion' => $item->descripcion,
                     'cantidad' => (int) $item->cantidad,
-                    'precio_cliente' => (float) $item->precio_unitario,
+                    'precio_unitario' => (float) $item->precio_unitario,
+                    'costo_unitario' => (float) $item->costo_unitario,
                 ];
 
                 continue;
@@ -138,13 +136,34 @@ class ConvertirCotizacionEnOrden
             $refacciones[] = [
                 'descripcion' => $item->descripcion,
                 'cantidad' => (int) $item->cantidad,
-                'precio_cliente' => (float) $item->precio_unitario,
-                'costo_unitario' => 0,
+                'precio_unitario_cliente' => (float) $item->precio_unitario,
+                'costo_unitario' => (float) $item->costo_unitario,
                 'notas' => 'Tomado de la cotización '.$cotizacion->folio.' (tipo '.$item->tipo.').',
             ];
         }
 
-        return ['servicios' => $servicios, 'refacciones' => $refacciones];
+        return ['detalles' => $detalles, 'refacciones' => $refacciones];
+    }
+
+    private function resolverServicioExacto(object $item): ?int
+    {
+        $descripcion = $this->normalizarDescripcion((string) $item->descripcion);
+        if ($descripcion === '') {
+            return null;
+        }
+
+        $coincidencias = Servicio::query()
+            ->where('activo', true)
+            ->get(['id', 'nombre'])
+            ->filter(fn (Servicio $servicio): bool => $this->normalizarDescripcion($servicio->nombre) === $descripcion)
+            ->values();
+
+        return $coincidencias->count() === 1 ? $coincidencias->first()->id : null;
+    }
+
+    private function normalizarDescripcion(string $descripcion): string
+    {
+        return (string) str($descripcion)->ascii()->lower()->squish();
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Actions\Ordenes;
 use App\Models\Equipo;
 use App\Models\OrdenServicio;
 use App\Models\Partner;
+use App\Models\Servicio;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -32,6 +33,7 @@ class ActualizarOrdenServicio
             }
 
             $this->validarAsignaciones($data);
+            $detalles = $this->normalizarDetalles($detalles);
             $orden->update($data);
             $orden->detalles()->delete();
             $orden->refacciones()->delete();
@@ -45,7 +47,10 @@ class ActualizarOrdenServicio
             }
 
             $resumen = $this->calculadora->resumen($detalles, $refacciones, (float) ($data['costo_tecnico'] ?? 0));
-            $orden->update(['total_cliente' => $resumen['total_cliente']]);
+            $orden->update([
+                'total_cliente' => $resumen['total_cliente'],
+                'utilidad_estimada' => $resumen['utilidad_estimada'],
+            ]);
 
             return $orden->fresh();
         });
@@ -85,5 +90,21 @@ class ActualizarOrdenServicio
                 ]);
             }
         }
+    }
+
+    /** @param array<int, array<string, mixed>> $detalles @return array<int, array<string, mixed>> */
+    private function normalizarDetalles(array $detalles): array
+    {
+        $servicios = Servicio::query()
+            ->whereIn('id', collect($detalles)->pluck('servicio_id')->filter())
+            ->pluck('nombre', 'id');
+
+        return array_map(function (array $detalle) use ($servicios): array {
+            if (blank($detalle['descripcion'] ?? null) && ! empty($detalle['servicio_id'])) {
+                $detalle['descripcion'] = $servicios[$detalle['servicio_id']] ?? null;
+            }
+
+            return $detalle;
+        }, $detalles);
     }
 }

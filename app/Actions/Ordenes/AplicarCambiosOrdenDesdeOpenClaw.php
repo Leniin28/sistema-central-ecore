@@ -98,6 +98,7 @@ class AplicarCambiosOrdenDesdeOpenClaw
                 $precio = $this->numero($servicio['precio_cliente'] ?? $servicio['precio'] ?? null) ?? (float) $resuelto->precio_base;
                 $detalle = $orden->detalles()->create($this->calculadora->detalle([
                     'servicio_id' => $resuelto->id,
+                    'descripcion' => $resuelto->nombre,
                     'cantidad' => $this->cantidad($servicio['cantidad'] ?? null),
                     'precio_unitario' => $precio,
                     'notas' => $servicio['notas'] ?? null,
@@ -182,7 +183,7 @@ class AplicarCambiosOrdenDesdeOpenClaw
 
     /**
      * Recomputes total_cliente over ALL current lines with the same formula the
-     * web panel uses. Does not touch costo_tecnico/comision/utilidad ni finanzas.
+     * web panel uses. It refreshes the estimated profit, but never closes finances.
      */
     private function recalcularTotal(OrdenServicio $orden): void
     {
@@ -191,8 +192,10 @@ class AplicarCambiosOrdenDesdeOpenClaw
         $resumen = $this->calculadora->resumen(
             $orden->detalles->map(fn ($detalle): array => [
                 'servicio_id' => $detalle->servicio_id,
+                'descripcion' => $detalle->descripcion,
                 'cantidad' => $detalle->cantidad,
                 'precio_unitario' => $detalle->precio_unitario,
+                'costo_unitario' => $detalle->costo_unitario,
             ])->all(),
             $orden->refacciones->map(fn ($refaccion): array => [
                 'descripcion' => $refaccion->descripcion,
@@ -203,12 +206,15 @@ class AplicarCambiosOrdenDesdeOpenClaw
             (float) $orden->costo_tecnico,
         );
 
-        $orden->update(['total_cliente' => $resumen['total_cliente']]);
+        $orden->update([
+            'total_cliente' => $resumen['total_cliente'],
+            'utilidad_estimada' => $resumen['utilidad_estimada'],
+        ]);
     }
 
     /**
      * @param  array<string, mixed>  $servicio
-     * @return Servicio|string|null  Servicio si hay match único; 'ambiguo' si varios; null si ninguno.
+     * @return Servicio|string|null Servicio si hay match único; 'ambiguo' si varios; null si ninguno.
      */
     private function resolverServicio(array $servicio): Servicio|string|null
     {

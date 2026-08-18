@@ -8,10 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'cotizacion_id',
+    'servicio_id',
     'tipo',
     'descripcion',
     'cantidad',
     'precio_unitario',
+    'costo_unitario',
+    'costo_total',
     'subtotal',
 ])]
 class CotizacionItem extends Model
@@ -34,6 +37,8 @@ class CotizacionItem extends Model
     {
         return [
             'precio_unitario' => 'decimal:2',
+            'costo_unitario' => 'decimal:2',
+            'costo_total' => 'decimal:2',
             'subtotal' => 'decimal:2',
         ];
     }
@@ -44,5 +49,10 @@ class CotizacionItem extends Model
     public function cotizacion(): BelongsTo
     {
         return $this->belongsTo(Cotizacion::class);
+    }
+
+    public function servicio(): BelongsTo
+    {
+        return $this->belongsTo(Servicio::class);
     }
 }

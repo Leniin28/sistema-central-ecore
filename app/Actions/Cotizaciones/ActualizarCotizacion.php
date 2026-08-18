@@ -28,6 +28,17 @@ class ActualizarCotizacion
                 ]);
             }
 
+            if (! $actor->isAdmin()) {
+                $costosExistentes = $cotizacion->items()->pluck('costo_unitario', 'id');
+                $items = array_map(function (array $item) use ($costosExistentes): array {
+                    $item['costo_unitario'] = isset($costosExistentes[$item['id'] ?? null])
+                        ? (float) $costosExistentes[$item['id']]
+                        : 0;
+
+                    return $item;
+                }, $items);
+            }
+
             $this->validarEquipo($data);
             $recepcion = $this->resolverRecepcion($data, $cotizacion);
             $resumen = $this->calculadora->resumen(

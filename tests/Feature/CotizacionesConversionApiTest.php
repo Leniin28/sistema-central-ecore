@@ -6,9 +6,44 @@ use App\Models\Cotizacion;
 use App\Models\OrdenServicio;
 use App\Models\Partner;
 use App\Models\Servicio;
+use App\Services\GenerarFinanzasOrdenServicio;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
+
+test('conversion transfers internal costs and creates traceable financial movements', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $cliente = Cliente::create(['nombre' => 'Cliente costos', 'telefono' => '4490000000', 'tipo_cliente' => 'mantenimiento']);
+    $cotizacion = Cotizacion::create([
+        'folio' => 'COT-COSTOS-1001', 'cliente_id' => $cliente->id, 'fecha' => today(),
+        'estado' => 'enviada', 'tipo_recepcion' => 'en_negocio', 'subtotal' => 1800,
+        'descuento' => 0, 'anticipo' => 0, 'total' => 1800, 'saldo' => 1800,
+    ]);
+    $cotizacion->items()->createMany([
+        ['tipo' => 'servicio', 'descripcion' => 'Diagnostico especializado', 'cantidad' => 2, 'precio_unitario' => 500, 'costo_unitario' => 120, 'costo_total' => 240, 'subtotal' => 1000],
+        ['tipo' => 'refaccion', 'descripcion' => 'SSD 480GB', 'cantidad' => 1, 'precio_unitario' => 800, 'costo_unitario' => 450, 'costo_total' => 450, 'subtotal' => 800],
+    ]);
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson("/api/internal/quotes/{$cotizacion->id}/convert-to-order", [
+            'external_id' => 'telegram-quote-costos-internos',
+            'recepcion' => ['falla_reportada' => 'Autorizado'],
+            'equipo' => ['tipo_equipo' => 'Laptop'],
+        ]);
+
+    $response->assertCreated()->assertJsonPath('total_cliente', 1800);
+    $orden = OrdenServicio::findOrFail($response->json('id'));
+
+    expect((float) $orden->detalles()->first()->costo_total)->toBe(240.0)
+        ->and((float) $orden->refacciones()->first()->costo_total)->toBe(450.0)
+        ->and((float) $orden->fresh()->utilidad_estimada)->toBe(1110.0);
+
+    app(GenerarFinanzasOrdenServicio::class)->generar($orden);
+
+    expect((float) $orden->fresh()->utilidad_neta)->toBe(1110.0)
+        ->and($orden->movimientosFinancieros()->where('categoria', 'servicio')->count())->toBe(1)
+        ->and($orden->movimientosFinancieros()->where('categoria', 'refaccion')->count())->toBe(1);
+});
 
 function cotizacionParaConvertir(array $items = []): Cotizacion
 {
@@ -95,7 +130,7 @@ test('la conversión es idempotente con external_id y no duplica órdenes', func
         ->and($segunda->json('id'))->toBe($primera->json('id'));
 });
 
-test('items de servicio sin match del catálogo generan warning y no líneas falsas', function () {
+test('items de servicio ad-hoc se conservan sin servicio del catálogo al convertir', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
     $cotizacion = cotizacionParaConvertir([
         ['tipo' => 'servicio', 'descripcion' => 'Reparación imposible de clasificar', 'cantidad' => 1, 'precio_unitario' => 999, 'subtotal' => 999],
@@ -108,13 +143,13 @@ test('items de servicio sin match del catálogo generan warning y no líneas fal
             'equipo' => ['tipo_equipo' => 'Laptop'],
         ]);
 
-    $response->assertCreated();
-    expect(collect($response->json('warnings'))->contains(fn ($w) => str_contains($w, 'No se encontró en el catálogo')))->toBeTrue();
+    $response->assertCreated()->assertJsonPath('total_cliente', 999);
 
     $orden = OrdenServicio::find($response->json('id'));
-    expect($orden->detalles()->count())->toBe(0)
-        ->and((float) $orden->total_cliente)->toBe(0.0)
-        ->and($orden->notas)->toContain('Reparación imposible de clasificar');
+    expect($orden->detalles()->count())->toBe(1)
+        ->and($orden->detalles->first()->servicio_id)->toBeNull()
+        ->and($orden->detalles->first()->descripcion)->toBe('Reparación imposible de clasificar')
+        ->and((float) $orden->total_cliente)->toBe(999.0);
 });
 
 test('un POST vacío devuelve 422 y no crea orden ni cambia la cotización', function () {

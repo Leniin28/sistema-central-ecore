@@ -12,6 +12,28 @@ use Illuminate\Validation\ValidationException;
 
 uses(RefreshDatabase::class);
 
+test('customer quote documents do not expose internal costs', function () {
+    $datos = datosCotizacion();
+    $cotizacion = app(CrearCotizacion::class)->ejecutar([
+        'cliente_id' => $datos['cliente']->id,
+    ], [[
+        'tipo' => 'servicio',
+        'descripcion' => 'Servicio con costo interno',
+        'cantidad' => 1,
+        'precio_unitario' => 500,
+        'costo_unitario' => 47.11,
+    ]], $datos['admin']);
+
+    $documento = view('cotizaciones._documento', [
+        'cotizacion' => $cotizacion->fresh(['items', 'cliente', 'equipo', 'partner']),
+        'negocio' => config('negocio'),
+    ])->render();
+
+    expect($documento)->toContain('$500.00')
+        ->not->toContain('47.11')
+        ->not->toContain('Costo interno');
+});
+
 function datosCotizacion(): array
 {
     $cliente = Cliente::create(['nombre' => 'Cliente cotizado', 'telefono' => '555', 'tipo_cliente' => 'mantenimiento']);

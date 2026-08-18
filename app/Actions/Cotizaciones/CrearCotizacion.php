@@ -26,6 +26,8 @@ class CrearCotizacion
                 abort(403);
             }
 
+            $items = $this->normalizarCostosInternos($items, $actor);
+
             if (! empty($data['external_id'])) {
                 $existente = Cotizacion::query()->where('external_id', $data['external_id'])->first();
 
@@ -163,5 +165,19 @@ class CrearCotizacion
         $consecutivo = $ultimoFolio ? ((int) substr($ultimoFolio, -4)) + 1 : 1;
 
         return 'COT-'.$fecha.'-'.str_pad((string) $consecutivo, 4, '0', STR_PAD_LEFT);
+    }
+
+    /** @param array<int, array<string, mixed>> $items @return array<int, array<string, mixed>> */
+    private function normalizarCostosInternos(array $items, ?User $actor): array
+    {
+        if ($actor?->isAdmin()) {
+            return $items;
+        }
+
+        return array_map(function (array $item): array {
+            $item['costo_unitario'] = 0;
+
+            return $item;
+        }, $items);
     }
 }

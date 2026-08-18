@@ -48,10 +48,13 @@ class StoreCotizacionRequest extends FormRequest
             'notas' => ['nullable', 'string', 'max:3000'],
 
             'items' => ['required', 'array', 'min:1'],
+            'items.*.id' => ['nullable', 'integer'],
             'items.*.tipo' => ['required', Rule::in(CotizacionItem::TIPOS)],
+            'items.*.servicio_id' => ['nullable', 'exists:servicios,id'],
             'items.*.descripcion' => ['required', 'string', 'max:255'],
             'items.*.cantidad' => ['required', 'integer', 'min:1'],
             'items.*.precio_unitario' => ['required', 'numeric', 'min:0'],
+            'items.*.costo_unitario' => ['nullable', 'numeric', 'min:0'],
         ];
     }
 

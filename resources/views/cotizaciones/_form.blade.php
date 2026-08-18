@@ -6,10 +6,12 @@
     if ($itemRows === null) {
         $itemRows = $cotizacion->exists
             ? $cotizacion->items->map(fn ($item) => [
+                'id' => $item->id,
                 'tipo' => $item->tipo,
                 'descripcion' => $item->descripcion,
                 'cantidad' => $item->cantidad,
                 'precio_unitario' => $item->precio_unitario,
+                'costo_unitario' => $item->costo_unitario,
             ])->values()->all()
             : [];
     }
@@ -139,6 +141,9 @@
         <div class="mt-5 grid gap-4">
             @foreach ($itemRows as $index => $row)
                 <div class="grid gap-3 rounded-md border border-neutral-200 p-4 dark:border-neutral-700 lg:grid-cols-12">
+                    @if (filled($row['id'] ?? null))
+                        <input type="hidden" name="items[{{ $index }}][id]" value="{{ $row['id'] }}">
+                    @endif
                     <div class="lg:col-span-2">
                         <label for="items_{{ $index }}_tipo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tipo</label>
                         <select
@@ -155,7 +160,7 @@
                         @enderror
                     </div>
 
-                    <div class="lg:col-span-5">
+                    <div class="{{ auth()->user()->isAdmin() ? 'lg:col-span-3' : 'lg:col-span-5' }}">
                         <label for="items_{{ $index }}_descripcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Descripción</label>
                         <input
                             id="items_{{ $index }}_descripcion"
@@ -200,6 +205,24 @@
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                         @enderror
                     </div>
+
+                    @if (auth()->user()->isAdmin())
+                        <div class="lg:col-span-2">
+                            <label for="items_{{ $index }}_costo_unitario" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Costo interno unitario</label>
+                            <input
+                                id="items_{{ $index }}_costo_unitario"
+                                name="items[{{ $index }}][costo_unitario]"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value="{{ $row['costo_unitario'] ?? '' }}"
+                                class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                            >
+                            @error("items.$index.costo_unitario")
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    @endif
                 </div>
             @endforeach
         </div>

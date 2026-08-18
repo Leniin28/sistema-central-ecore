@@ -9,8 +9,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'orden_servicio_id',
     'servicio_id',
+    'descripcion',
     'cantidad',
     'precio_unitario',
+    'costo_unitario',
+    'costo_total',
     'subtotal',
     'notas',
 ])]
@@ -27,6 +30,8 @@ class OrdenServicioDetalle extends Model
     {
         return [
             'precio_unitario' => 'decimal:2',
+            'costo_unitario' => 'decimal:2',
+            'costo_total' => 'decimal:2',
             'subtotal' => 'decimal:2',
             'cantidad' => 'integer',
         ];
