@@ -101,6 +101,109 @@ test('admin puede crear una recepcion completa', function () {
     $this->assertDatabaseHas('ordenes_servicio', ['total_cliente' => 300]);
 });
 
+test('admin puede crear una recepcion sin servicios ni refacciones', function () {
+    $datos = datosOrden();
+
+    $response = $this->actingAs($datos['admin'])->post(route('admin.recepciones.store'), [
+        'cliente_modo' => 'existente',
+        'cliente_id' => $datos['cliente']->id,
+        'equipo_modo' => 'existente',
+        'equipo_id' => $datos['equipo']->id,
+        'orden' => [
+            'tipo_recepcion' => 'sucursal',
+            'partner_recepcion_id' => $datos['logistica']->id,
+            'problema_reportado' => 'No enciende',
+        ],
+        'servicios' => [],
+        'refacciones' => [],
+    ]);
+
+    $orden = OrdenServicio::latest('id')->firstOrFail();
+
+    $response->assertRedirect(route('admin.ordenes-servicio.show', $orden));
+    expect($orden->estado)->toBe('recibido')
+        ->and((float) $orden->total_cliente)->toBe(0.0)
+        ->and($orden->detalles()->count())->toBe(0)
+        ->and($orden->refacciones()->count())->toBe(0)
+        ->and($orden->movimientosFinancieros()->count())->toBe(0)
+        ->and($orden->finanzas_generadas)->toBeFalse();
+
+    $this->actingAs($datos['admin'])
+        ->get(route('admin.ordenes-servicio.nota-recepcion', $orden))
+        ->assertOk()
+        ->assertSee('No enciende');
+});
+
+test('una fila visual vacia no crea un detalle ni impide la recepcion', function () {
+    $datos = datosOrden();
+
+    $this->actingAs($datos['admin'])->post(route('admin.recepciones.store'), [
+        'cliente_modo' => 'existente',
+        'cliente_id' => $datos['cliente']->id,
+        'equipo_modo' => 'existente',
+        'equipo_id' => $datos['equipo']->id,
+        'orden' => [
+            'tipo_recepcion' => 'sucursal',
+            'problema_reportado' => 'Se apaga de forma intermitente',
+        ],
+        'servicios' => [[
+            'servicio_id' => '',
+            'cantidad' => 1,
+            'precio_unitario' => '',
+            'notas' => '',
+        ]],
+        'refacciones' => [],
+    ])->assertRedirect();
+
+    $orden = OrdenServicio::latest('id')->firstOrFail();
+
+    expect($orden->detalles()->count())->toBe(0)
+        ->and((float) $orden->total_cliente)->toBe(0.0);
+});
+
+test('una recepcion sin servicios puede recibir un servicio mediante la edicion existente', function () {
+    $datos = datosOrden();
+
+    $this->actingAs($datos['admin'])->post(route('admin.recepciones.store'), [
+        'cliente_modo' => 'existente',
+        'cliente_id' => $datos['cliente']->id,
+        'equipo_modo' => 'existente',
+        'equipo_id' => $datos['equipo']->id,
+        'orden' => [
+            'tipo_recepcion' => 'sucursal',
+            'problema_reportado' => 'No enciende',
+        ],
+        'servicios' => [],
+        'refacciones' => [],
+    ])->assertRedirect();
+
+    $orden = OrdenServicio::latest('id')->firstOrFail();
+
+    $this->actingAs($datos['admin'])->put(route('admin.ordenes-servicio.update', $orden), [
+        'cliente_id' => $orden->cliente_id,
+        'equipo_id' => $orden->equipo_id,
+        'tipo_recepcion' => $orden->tipo_recepcion,
+        'partner_recepcion_id' => $orden->partner_recepcion_id,
+        'costo_tecnico' => 0,
+        'notas' => $orden->notas,
+        'servicios' => [[
+            'servicio_id' => $datos['servicio']->id,
+            'descripcion' => $datos['servicio']->nombre,
+            'cantidad' => 1,
+            'precio_unitario' => 300,
+            'costo_unitario' => 0,
+        ]],
+        'refacciones' => [],
+    ])->assertRedirect(route('admin.ordenes-servicio.show', $orden));
+
+    $orden->refresh();
+
+    expect($orden->detalles()->count())->toBe(1)
+        ->and($orden->detalles()->sole()->servicio_id)->toBe($datos['servicio']->id)
+        ->and((float) $orden->total_cliente)->toBe(300.0)
+        ->and($orden->estado)->toBe('recibido');
+});
+
 test('socio tecnico no puede acceder a nueva recepcion', function () {
     $partner = Partner::create(['nombre' => 'Fixop', 'tipo_socio' => 'tecnico', 'comision_fija' => 0, 'activo' => true]);
     $tecnico = User::factory()->create(['role' => 'socio_tecnico', 'partner_id' => $partner->id, 'email_verified_at' => now()]);

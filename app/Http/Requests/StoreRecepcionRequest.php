@@ -59,7 +59,7 @@ class StoreRecepcionRequest extends FormRequest
             'orden.problema_reportado' => ['required', 'string', 'max:3000'],
             'orden.notas' => ['nullable', 'string', 'max:3000'],
 
-            'servicios' => ['required', 'array', 'min:1'],
+            'servicios' => ['array'],
             'servicios.*.servicio_id' => ['required', 'exists:servicios,id'],
             'servicios.*.cantidad' => ['required', 'integer', 'min:1'],
             'servicios.*.precio_unitario' => ['required', 'numeric', 'min:0'],

@@ -146,7 +146,7 @@
                 </section>
 
                 <section aria-labelledby="servicios-heading">
-                    <div class="flex items-center justify-between border-b border-neutral-200 pb-3 dark:border-neutral-700"><div class="flex items-center gap-3"><span class="flex size-7 items-center justify-center rounded-full bg-neutral-900 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900">4</span><div><h2 id="servicios-heading" class="font-semibold text-neutral-950 dark:text-white">Servicios solicitados</h2><p class="text-sm text-neutral-500 dark:text-neutral-400">Elige al menos un servicio.</p></div></div></div>
+                    <div class="flex items-center justify-between border-b border-neutral-200 pb-3 dark:border-neutral-700"><div class="flex items-center gap-3"><span class="flex size-7 items-center justify-center rounded-full bg-neutral-900 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900">4</span><div><h2 id="servicios-heading" class="font-semibold text-neutral-950 dark:text-white">Servicios solicitados</h2><p class="text-sm text-neutral-500 dark:text-neutral-400">Opcional. Puedes agregarlos ahora o después del diagnóstico.</p></div></div></div>
                     @error('servicios') <p class="mt-3 text-sm text-red-600">{{ $message }}</p> @enderror
                     <div class="mt-4 divide-y divide-neutral-200 border-y border-neutral-200 dark:divide-neutral-700 dark:border-neutral-700">
                         @foreach ($servicioRows as $index => $row)
