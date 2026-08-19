@@ -1,14 +1,9 @@
 @php
     $logoRuta = filled($negocio['logo'] ?? null) ? public_path($negocio['logo']) : null;
     $logoBase64 = ($logoRuta && is_file($logoRuta)) ? base64_encode(file_get_contents($logoRuta)) : null;
-    $notas = trim((string) $orden->notas);
-    $problema = $notas;
-    $observaciones = null;
-
-    if (preg_match('/^Problema reportado:\s*(.*?)(?:\R\RNotas internas:\s*(.*))?$/s', $notas, $coincidencias)) {
-        $problema = trim($coincidencias[1]);
-        $observaciones = trim($coincidencias[2] ?? '');
-    }
+    $extractorFalla = app(\App\Services\ExtraerFallaReportada::class);
+    $problema = $extractorFalla->extraer($orden->notas);
+    $observaciones = $extractorFalla->extraerObservaciones($orden->notas);
 @endphp
 <div style="font-family: DejaVu Sans, Helvetica, Arial, sans-serif; color: #1f2937; font-size: 12px; line-height: 1.5;">
     <table style="width: 100%; border-collapse: collapse;">

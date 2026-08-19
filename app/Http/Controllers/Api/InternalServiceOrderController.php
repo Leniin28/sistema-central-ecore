@@ -9,6 +9,7 @@ use App\Exceptions\ConfirmacionEntregaRequeridaException;
 use App\Exceptions\OrdenBloqueadaException;
 use App\Http\Controllers\Controller;
 use App\Models\OrdenServicio;
+use App\Services\ExtraerFallaReportada;
 use App\Services\GenerarMensajeCliente;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,8 @@ use Illuminate\Validation\Rule;
 
 class InternalServiceOrderController extends Controller
 {
+    public function __construct(private ExtraerFallaReportada $extractorFalla) {}
+
     /**
      * Show a service order (by numeric id or folio) with a safe payload for
      * OpenClaw: full lines and totals, but never password_equipo — only the
@@ -364,7 +367,7 @@ class InternalServiceOrderController extends Controller
             'partner_recepcion' => $orden->partnerRecepcion?->nombre,
             'partner_tecnico' => $orden->partnerTecnico?->nombre,
             'tipo_recepcion' => $orden->tipo_recepcion,
-            'falla_reportada' => $this->extraerFallaReportada($orden->notas),
+            'falla_reportada' => $this->extractorFalla->extraer($orden->notas),
             'notas' => $orden->notas,
             'servicios' => $orden->detalles->map(fn ($detalle): array => [
                 'servicio_id' => $detalle->servicio_id,
@@ -390,30 +393,5 @@ class InternalServiceOrderController extends Controller
             'fecha_entrega' => $orden->fecha_entrega?->toIso8601String(),
             'show_url' => route('admin.ordenes-servicio.show', $orden),
         ];
-    }
-
-    /**
-     * Best-effort extraction of the reported fault from the order notes: the
-     * order has no dedicated column, so the reception flow stores it as a
-     * "Falla reportada:" block. A later correction ("Falla reportada
-     * (corregida): ...") wins over the original.
-     */
-    private function extraerFallaReportada(?string $notas): ?string
-    {
-        if (blank($notas)) {
-            return null;
-        }
-
-        if (preg_match_all('/Falla reportada \(corregida\):\s*(.+)/u', $notas, $corregidas) && $corregidas[1] !== []) {
-            return trim((string) end($corregidas[1]));
-        }
-
-        if (preg_match('/Falla reportada:\s*\n?(.+?)(?:\n\n|$)/su', $notas, $original)) {
-            $falla = trim($original[1]);
-
-            return $falla === '(no especificada en la etiqueta)' ? null : $falla;
-        }
-
-        return null;
     }
 }

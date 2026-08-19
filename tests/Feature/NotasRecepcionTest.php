@@ -1,8 +1,11 @@
 <?php
 
+use App\Actions\Cotizaciones\ConvertirCotizacionEnOrden;
 use App\Actions\Ordenes\CrearOrdenServicio;
+use App\Actions\Recepciones\RegistrarRecepcionDesdeOpenClaw;
 use App\Models\CategoriaServicio;
 use App\Models\Cliente;
+use App\Models\Cotizacion;
 use App\Models\Equipo;
 use App\Models\Partner;
 use App\Models\Servicio;
@@ -105,6 +108,97 @@ test('usuario no autorizado no puede acceder a la nota de una orden ajena', func
     $this->actingAs($datos['ajeno'])
         ->get(route('logistica.ordenes-servicio.nota-recepcion.pdf', $datos['orden']))
         ->assertForbidden();
+
+    $this->actingAs($datos['ajeno'])
+        ->get(route('logistica.ordenes-servicio.nota-recepcion.png', $datos['orden']))
+        ->assertForbidden();
+});
+
+test('la nota de una orden convertida muestra la falla sin exponer el origen operativo', function () {
+    $datos = datosNotaRecepcion();
+    $cotizacion = Cotizacion::create([
+        'folio' => 'COT-NOTA-1001',
+        'cliente_id' => $datos['orden']->cliente_id,
+        'fecha' => today(),
+        'estado' => 'enviada',
+        'tipo_recepcion' => 'en_negocio',
+        'subtotal' => 500,
+        'descuento' => 0,
+        'anticipo' => 0,
+        'total' => 500,
+        'saldo' => 500,
+    ]);
+    $cotizacion->items()->create([
+        'tipo' => 'servicio',
+        'descripcion' => 'Diagnóstico de pantalla',
+        'cantidad' => 1,
+        'precio_unitario' => 500,
+        'subtotal' => 500,
+    ]);
+
+    $resultado = app(ConvertirCotizacionEnOrden::class)->ejecutar($cotizacion, [
+        'external_id' => 'nota-cotizacion-1001',
+        'recepcion' => ['falla_reportada' => 'La pantalla parpadea al encender.'],
+        'equipo' => ['tipo_equipo' => 'Laptop'],
+        'actor' => $datos['admin'],
+    ]);
+
+    $this->actingAs($datos['admin'])
+        ->get(route('admin.ordenes-servicio.nota-recepcion', $resultado['orden']))
+        ->assertOk()
+        ->assertSee('La pantalla parpadea al encender.')
+        ->assertDontSee('Origen:')
+        ->assertDontSee('Convertida desde la cotización');
+});
+
+test('la nota de OpenClaw muestra la falla sin exponer bloques operativos', function () {
+    $datos = datosNotaRecepcion();
+    $resultado = app(RegistrarRecepcionDesdeOpenClaw::class)->ejecutar([
+        'external_id' => 'nota-openclaw-1001',
+        'cliente_id' => $datos['orden']->cliente_id,
+        'equipo' => ['tipo_equipo' => 'Laptop', 'marca' => 'Lenovo'],
+        'partner_recepcion_id' => $datos['orden']->partner_recepcion_id,
+        'recepcion' => [
+            'falla_reportada' => 'No reconoce el teclado.',
+            'fecha_etiqueta' => '2026-08-18',
+            'folio_externo' => 'EXT-7788',
+            'origen' => 'foto-etiqueta',
+        ],
+    ]);
+
+    $this->actingAs($datos['admin'])
+        ->get(route('admin.ordenes-servicio.nota-recepcion', $resultado['orden']))
+        ->assertOk()
+        ->assertSee('No reconoce el teclado.')
+        ->assertDontSee('Datos de etiqueta')
+        ->assertDontSee('EXT-7788')
+        ->assertDontSee('Registrado automáticamente por OpenClaw');
+});
+
+test('la falla corregida tiene prioridad y no mezcla las notas restantes', function () {
+    $datos = datosNotaRecepcion();
+    $datos['orden']->update([
+        'notas' => "Falla reportada:\nNo enciende.\n\nDatos de etiqueta:\nFolio externo: EXT-1\n\nFalla reportada (corregida): Solo falla el puerto USB\nFolio externo (corregido): EXT-2",
+    ]);
+
+    $this->actingAs($datos['admin'])
+        ->get(route('admin.ordenes-servicio.nota-recepcion', $datos['orden']))
+        ->assertOk()
+        ->assertSee('Solo falla el puerto USB')
+        ->assertDontSee('No enciende.')
+        ->assertDontSee('EXT-1')
+        ->assertDontSee('EXT-2');
+});
+
+test('la nota usa un fallback seguro cuando el formato es desconocido', function () {
+    $datos = datosNotaRecepcion();
+    $datos['orden']->update(['notas' => 'TEXTO INTERNO QUE NO DEBE SALIR AL CLIENTE']);
+
+    $this->actingAs($datos['admin'])
+        ->get(route('admin.ordenes-servicio.nota-recepcion', $datos['orden']))
+        ->assertOk()
+        ->assertSee('Sin especificar')
+        ->assertDontSee('TEXTO INTERNO QUE NO DEBE SALIR AL CLIENTE');
 });
 
 test('la ruta de PDF descarga la nota de recepcion', function () {
