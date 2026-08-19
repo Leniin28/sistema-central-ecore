@@ -73,7 +73,7 @@ class RegistrarRecepcionDesdeOpenClaw
                     'partner_recepcion_id' => $partner['id'],
                     'tipo_recepcion' => $data['tipo_recepcion'] ?? 'directo',
                     'notas' => $notas,
-                    'costo_tecnico' => 0,
+                    'costo_tecnico' => null,
                     'external_id' => $data['external_id'] ?? null,
                     'origen' => $data['recepcion']['origen'] ?? 'openclaw',
                 ],

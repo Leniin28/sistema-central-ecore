@@ -23,6 +23,9 @@ class CrearOrdenServicio
     {
         return DB::transaction(function () use ($data, $detalles, $refacciones, $actor): OrdenServicio {
             $data = $this->prepararAsignaciones($data, $actor);
+            if (! $actor->isAdmin()) {
+                $data['costo_tecnico'] = null;
+            }
             $this->validarEquipo($data);
             $detalles = $this->normalizarDetalles($detalles);
             [$detalles, $refacciones] = $this->protegerCostosInternos($detalles, $refacciones, $actor);
@@ -32,7 +35,7 @@ class CrearOrdenServicio
                 'folio' => $this->generarFolio(),
                 'estado' => 'recibido',
                 'total_cliente' => 0,
-                'costo_tecnico' => $data['costo_tecnico'] ?? 0,
+                'costo_tecnico' => $data['costo_tecnico'] ?? null,
                 'comision_logistica' => 0,
                 'utilidad_estimada' => 0,
                 'costos_incompletos' => false,
@@ -58,7 +61,12 @@ class CrearOrdenServicio
                 $orden->refacciones()->create($this->calculadora->refaccion($refaccion));
             }
 
-            $resumen = $this->calculadora->resumen($detalles, $refacciones, (float) ($data['costo_tecnico'] ?? 0));
+            $resumen = $this->calculadora->resumen(
+                $detalles,
+                $refacciones,
+                isset($data['costo_tecnico']) ? (float) $data['costo_tecnico'] : null,
+                tienePartnerTecnico: ! empty($data['partner_tecnico_id']),
+            );
             $orden->update([
                 'total_cliente' => $resumen['total_cliente'],
                 'utilidad_estimada' => $resumen['utilidad_estimada'],

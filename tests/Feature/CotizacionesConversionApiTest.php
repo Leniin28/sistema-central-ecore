@@ -1,11 +1,13 @@
 <?php
 
+use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\CategoriaServicio;
 use App\Models\Cliente;
 use App\Models\Cotizacion;
 use App\Models\OrdenServicio;
 use App\Models\Partner;
 use App\Models\Servicio;
+use App\Models\User;
 use App\Services\GenerarFinanzasOrdenServicio;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -16,8 +18,8 @@ test('conversion rejects a quote line already traced as the opposite order-line 
     $cotizacion = cotizacionParaConvertir([
         ['tipo' => 'servicio', 'descripcion' => 'Diagnostico cruzado', 'cantidad' => 1, 'precio_unitario' => 550, 'subtotal' => 550],
     ]);
-    $usuario = \App\Models\User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
-    $ordenPrevia = app(\App\Actions\Ordenes\CrearOrdenServicio::class)->ejecutar([
+    $usuario = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $ordenPrevia = app(CrearOrdenServicio::class)->ejecutar([
         'cliente_id' => $cotizacion->cliente_id,
         'tipo_recepcion' => 'directo',
         'costo_tecnico' => 0,
@@ -40,7 +42,7 @@ test('conversion rejects a quote line already traced as the opposite order-line 
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['cotizacion']);
 
-    expect(\App\Models\OrdenServicio::count())->toBe(1)
+    expect(OrdenServicio::count())->toBe(1)
         ->and($ordenPrevia->detalles()->count())->toBe(0)
         ->and($ordenPrevia->refacciones()->count())->toBe(1);
 });
@@ -70,6 +72,7 @@ test('conversion transfers internal costs and creates traceable financial moveme
 
     expect((float) $orden->detalles()->first()->costo_total)->toBe(240.0)
         ->and((float) $orden->refacciones()->first()->costo_total)->toBe(450.0)
+        ->and($orden->costo_tecnico)->toBeNull()
         ->and((float) $orden->fresh()->utilidad_estimada)->toBe(1110.0);
 
     app(GenerarFinanzasOrdenServicio::class)->generar($orden);
@@ -110,8 +113,8 @@ test('linked historical quote copies only its missing lines during reconciliatio
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
     $cotizacion = cotizacionParaConvertir();
     $cotizacion->update(['estado' => 'aceptada']);
-    $admin = \App\Models\User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
-    $orden = app(\App\Actions\Ordenes\CrearOrdenServicio::class)->ejecutar([
+    $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $orden = app(CrearOrdenServicio::class)->ejecutar([
         'cotizacion_id' => $cotizacion->id,
         'cliente_id' => $cotizacion->cliente_id,
         'tipo_recepcion' => 'directo',

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Ordenes\ValidarCostoTecnicoParaEntrega;
+use App\Exceptions\CostoTecnicoPendienteException;
 use App\Models\OrdenServicio;
 use App\Services\GenerarFinanzasOrdenServicio;
 use Illuminate\Http\RedirectResponse;
@@ -17,40 +19,51 @@ class OrdenServicioEstadoController extends Controller
     /**
      * Store a service order status change.
      */
-    public function store(Request $request, OrdenServicio $ordenServicio): RedirectResponse
-    {
+    public function store(
+        Request $request,
+        OrdenServicio $ordenServicio,
+        ValidarCostoTecnicoParaEntrega $validarCostoTecnico,
+    ): RedirectResponse {
         $data = $request->validate([
             'estado_nuevo' => ['required', Rule::in(self::ESTADOS)],
             'comentario' => ['nullable', 'string'],
         ]);
 
-        DB::transaction(function () use ($ordenServicio, $data): void {
-            $ordenServicio = OrdenServicio::query()->lockForUpdate()->findOrFail($ordenServicio->id);
-            $this->authorizeChange($ordenServicio);
-            abort_if($ordenServicio->estado === 'entregado' || $ordenServicio->finanzas_generadas, 403);
-            abort_if($data['estado_nuevo'] === $ordenServicio->estado, 403);
-            abort_unless(in_array($data['estado_nuevo'], $this->estadosDisponibles($ordenServicio), true), 403);
+        try {
+            DB::transaction(function () use ($ordenServicio, $data, $validarCostoTecnico): void {
+                $ordenServicio = OrdenServicio::query()->lockForUpdate()->findOrFail($ordenServicio->id);
+                $this->authorizeChange($ordenServicio);
+                abort_if($ordenServicio->estado === 'entregado' || $ordenServicio->finanzas_generadas, 403);
+                abort_if($data['estado_nuevo'] === $ordenServicio->estado, 403);
+                abort_unless(in_array($data['estado_nuevo'], $this->estadosDisponibles($ordenServicio), true), 403);
 
-            $estadoAnterior = $ordenServicio->estado;
+                if ($data['estado_nuevo'] === 'entregado') {
+                    $validarCostoTecnico->ejecutar($ordenServicio);
+                }
 
-            $ordenServicio->update([
-                'estado' => $data['estado_nuevo'],
-                'fecha_entrega' => $data['estado_nuevo'] === 'entregado'
-                    ? now()
-                    : $ordenServicio->fecha_entrega,
-            ]);
+                $estadoAnterior = $ordenServicio->estado;
 
-            $ordenServicio->historialEstados()->create([
-                'user_id' => auth()->id(),
-                'estado_anterior' => $estadoAnterior,
-                'estado_nuevo' => $data['estado_nuevo'],
-                'comentario' => $data['comentario'] ?? null,
-            ]);
+                $ordenServicio->update([
+                    'estado' => $data['estado_nuevo'],
+                    'fecha_entrega' => $data['estado_nuevo'] === 'entregado'
+                        ? now()
+                        : $ordenServicio->fecha_entrega,
+                ]);
 
-            if ($data['estado_nuevo'] === 'entregado') {
-                app(GenerarFinanzasOrdenServicio::class)->generar($ordenServicio);
-            }
-        });
+                $ordenServicio->historialEstados()->create([
+                    'user_id' => auth()->id(),
+                    'estado_anterior' => $estadoAnterior,
+                    'estado_nuevo' => $data['estado_nuevo'],
+                    'comentario' => $data['comentario'] ?? null,
+                ]);
+
+                if ($data['estado_nuevo'] === 'entregado') {
+                    app(GenerarFinanzasOrdenServicio::class)->generar($ordenServicio);
+                }
+            });
+        } catch (CostoTecnicoPendienteException $exception) {
+            return back()->withErrors(['estado_nuevo' => $exception->getMessage()]);
+        }
 
         return redirect()
             ->route($this->routePrefix().'.ordenes-servicio.show', $ordenServicio)

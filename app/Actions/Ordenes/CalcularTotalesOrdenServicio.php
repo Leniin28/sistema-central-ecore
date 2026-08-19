@@ -64,8 +64,13 @@ class CalcularTotalesOrdenServicio
      * @param  array<int, array<string, mixed>>  $refacciones
      * @return array<string, float|bool>
      */
-    public function resumen(array $detalles, array $refacciones, float $costoTecnico = 0, float $comision = 0): array
-    {
+    public function resumen(
+        array $detalles,
+        array $refacciones,
+        ?float $costoTecnico = null,
+        float $comision = 0,
+        bool $tienePartnerTecnico = false,
+    ): array {
         $detallesCalculados = collect($detalles)->map(fn (array $detalle): array => $this->detalle($detalle));
         $totalServicios = (float) $detallesCalculados->sum('subtotal');
         $costoServicios = (float) $detallesCalculados->sum('costo_total');
@@ -76,7 +81,7 @@ class CalcularTotalesOrdenServicio
         $costoRefacciones = (float) $refaccionesCalculadas->sum('costo_total');
         $totalCliente = round($totalServicios + $totalRefacciones, 2);
 
-        $costosIncompletos = $detallesCalculados->contains(
+        $costosIncompletos = ($tienePartnerTecnico && $costoTecnico === null) || $detallesCalculados->contains(
             fn (array $detalle): bool => $detalle['costo_total'] === null,
         ) || $refaccionesCalculadas->contains(
             fn (array $refaccion): bool => $refaccion['costo_total'] === null,
@@ -89,7 +94,7 @@ class CalcularTotalesOrdenServicio
             'costo_refacciones' => round($costoRefacciones, 2),
             'total_cliente' => $totalCliente,
             'costo_total_interno' => round($costoServicios + $costoRefacciones, 2),
-            'utilidad_estimada' => round($totalCliente - $costoServicios - $costoRefacciones - $costoTecnico - $comision, 2),
+            'utilidad_estimada' => round($totalCliente - $costoServicios - $costoRefacciones - ($costoTecnico ?? 0) - $comision, 2),
             'costos_incompletos' => $costosIncompletos,
         ];
     }

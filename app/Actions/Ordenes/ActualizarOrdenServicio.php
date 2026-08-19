@@ -34,6 +34,11 @@ class ActualizarOrdenServicio
 
             $this->validarAsignaciones($data);
             $detalles = $this->normalizarDetalles($detalles);
+
+            if ((int) ($orden->partner_tecnico_id ?? 0) !== (int) ($data['partner_tecnico_id'] ?? 0)) {
+                $data['costo_tecnico'] = null;
+            }
+
             $orden->update($data);
             $orden->detalles()->delete();
             $orden->refacciones()->delete();
@@ -46,7 +51,12 @@ class ActualizarOrdenServicio
                 $orden->refacciones()->create($this->calculadora->refaccion($refaccion));
             }
 
-            $resumen = $this->calculadora->resumen($detalles, $refacciones, (float) ($data['costo_tecnico'] ?? 0));
+            $resumen = $this->calculadora->resumen(
+                $detalles,
+                $refacciones,
+                isset($data['costo_tecnico']) ? (float) $data['costo_tecnico'] : null,
+                tienePartnerTecnico: ! empty($data['partner_tecnico_id']),
+            );
             $orden->update([
                 'total_cliente' => $resumen['total_cliente'],
                 'utilidad_estimada' => $resumen['utilidad_estimada'],

@@ -35,7 +35,7 @@ class CrearRecepcion
                 ...$ordenData,
                 'cliente_id' => $cliente->id,
                 'equipo_id' => $equipo->id,
-                'costo_tecnico' => 0,
+                'costo_tecnico' => null,
             ], $data['servicios'], $data['refacciones'] ?? [], $actor);
         });
     }

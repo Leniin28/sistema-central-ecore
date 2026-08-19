@@ -71,3 +71,15 @@ test('preserva costo desconocido y señala utilidad incompleta', function () {
     ])->and($resumen['utilidad_estimada'])->toBe(500.0)
         ->and($resumen['costos_incompletos'])->toBeTrue();
 });
+
+test('el costo tecnico pendiente solo marca incompleta una orden con partner tecnico', function () {
+    $calculadora = new CalcularTotalesOrdenServicio;
+
+    $sinPartner = $calculadora->resumen([], [], null, tienePartnerTecnico: false);
+    $conPartnerPendiente = $calculadora->resumen([], [], null, tienePartnerTecnico: true);
+    $conPartnerSinCobro = $calculadora->resumen([], [], 0, tienePartnerTecnico: true);
+
+    expect($sinPartner['costos_incompletos'])->toBeFalse()
+        ->and($conPartnerPendiente['costos_incompletos'])->toBeTrue()
+        ->and($conPartnerSinCobro['costos_incompletos'])->toBeFalse();
+});

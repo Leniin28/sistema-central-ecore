@@ -93,7 +93,7 @@ class ConvertirCotizacionEnOrden
                     'partner_recepcion_id' => $partner,
                     'tipo_recepcion' => 'directo',
                     'notas' => implode("\n\n", $bloques),
-                    'costo_tecnico' => 0,
+                    'costo_tecnico' => null,
                     'external_id' => $data['external_id'] ?? null,
                     'origen' => $origen,
                 ],
@@ -234,7 +234,8 @@ class ConvertirCotizacionEnOrden
         $costoRefacciones = (float) $orden->refacciones->sum('costo_total');
         $totalCliente = $totalServicios + $totalRefacciones;
         $costosIncompletos = $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)
-            || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null);
+            || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null)
+            || ($orden->partner_tecnico_id !== null && $orden->costo_tecnico === null);
 
         $orden->update([
             'total_cliente' => $totalCliente,

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Actions\Ordenes\ValidarCostoTecnicoParaEntrega;
 use App\Models\MovimientoFinanciero;
 use App\Models\OrdenServicio;
 use Illuminate\Support\Facades\DB;
@@ -9,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 
 class GenerarFinanzasOrdenServicio
 {
+    public function __construct(private ValidarCostoTecnicoParaEntrega $validarCostoTecnico) {}
+
     public function generar(OrdenServicio $orden): void
     {
         DB::transaction(function () use ($orden): void {
@@ -17,6 +20,8 @@ class GenerarFinanzasOrdenServicio
             if ($orden->finanzas_generadas) {
                 return;
             }
+
+            $this->validarCostoTecnico->ejecutar($orden);
 
             if ($orden->movimientosFinancieros()->exists()) {
                 throw ValidationException::withMessages([
@@ -27,7 +32,7 @@ class GenerarFinanzasOrdenServicio
             $orden->loadMissing(['partnerRecepcion', 'partnerTecnico', 'detalles', 'refacciones']);
             $totalCliente = (float) $orden->total_cliente;
             $comisionLogistica = (float) ($orden->partnerRecepcion?->comision_fija ?? 0);
-            $costoTecnico = (float) $orden->costo_tecnico;
+            $costoTecnico = (float) ($orden->costo_tecnico ?? 0);
             $totalCostoRefacciones = (float) $orden->refacciones->sum('costo_total');
             $totalCostoServicios = (float) $orden->detalles->sum('costo_total');
 
@@ -89,7 +94,8 @@ class GenerarFinanzasOrdenServicio
                 'utilidad_estimada' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
                 'utilidad_neta' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
                 'costos_incompletos' => $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)
-                    || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null),
+                    || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null)
+                    || ($orden->partner_tecnico_id !== null && $orden->costo_tecnico === null),
                 'finanzas_generadas' => true,
             ]);
         });

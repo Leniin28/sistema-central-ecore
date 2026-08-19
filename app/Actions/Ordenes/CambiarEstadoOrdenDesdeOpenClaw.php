@@ -30,6 +30,7 @@ class CambiarEstadoOrdenDesdeOpenClaw
     public function __construct(
         private ObtenerUsuarioSistema $usuarioSistema,
         private GenerarFinanzasOrdenServicio $finanzas,
+        private ValidarCostoTecnicoParaEntrega $validarCostoTecnico,
     ) {}
 
     /**
@@ -70,6 +71,10 @@ class CambiarEstadoOrdenDesdeOpenClaw
                     "Marcar la orden {$orden->folio} como entregada cierra la orden y genera finanzas. "
                     .'Reenvía la petición con confirm_final_delivery=true para confirmar.',
                 );
+            }
+
+            if ($estadoNuevo === 'entregado') {
+                $this->validarCostoTecnico->ejecutar($orden);
             }
 
             $estadoAnterior = $orden->estado;

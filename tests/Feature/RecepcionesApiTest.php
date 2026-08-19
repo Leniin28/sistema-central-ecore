@@ -88,6 +88,7 @@ test('la API de recepción crea cliente, equipo y orden con datos mínimos', fun
     $orden = OrdenServicio::firstWhere('external_id', 'telegram-photo-min');
     expect($orden)->not->toBeNull()
         ->and((float) $orden->total_cliente)->toBe(0.0)
+        ->and($orden->costo_tecnico)->toBeNull()
         ->and($orden->finanzas_generadas)->toBeFalse()
         ->and(Cliente::where('nombre', 'Cliente Mínimo')->exists())->toBeTrue()
         ->and(Equipo::where('tipo_equipo', 'PC de escritorio')->exists())->toBeTrue()

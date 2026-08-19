@@ -99,6 +99,7 @@ test('admin puede crear una recepcion completa', function () {
     $response->assertRedirect();
     $this->assertDatabaseHas('clientes', ['nombre' => 'Nuevo cliente']);
     $this->assertDatabaseHas('ordenes_servicio', ['total_cliente' => 300]);
+    expect(OrdenServicio::latest('id')->firstOrFail()->costo_tecnico)->toBeNull();
 });
 
 test('admin puede crear una recepcion sin servicios ni refacciones', function () {

@@ -6,6 +6,7 @@ use App\Actions\Ordenes\ActualizarPerfilOrdenDesdeOpenClaw;
 use App\Actions\Ordenes\AplicarCambiosOrdenDesdeOpenClaw;
 use App\Actions\Ordenes\CambiarEstadoOrdenDesdeOpenClaw;
 use App\Exceptions\ConfirmacionEntregaRequeridaException;
+use App\Exceptions\CostoTecnicoPendienteException;
 use App\Exceptions\OrdenBloqueadaException;
 use App\Http\Controllers\Controller;
 use App\Models\OrdenServicio;
@@ -245,7 +246,7 @@ class InternalServiceOrderController extends Controller
                 $data['external_id'] ?? null,
                 (bool) ($data['confirm_final_delivery'] ?? false),
             );
-        } catch (OrdenBloqueadaException|ConfirmacionEntregaRequeridaException $exception) {
+        } catch (OrdenBloqueadaException|ConfirmacionEntregaRequeridaException|CostoTecnicoPendienteException $exception) {
             Log::warning('API interna: cambio de estado rechazado.', [
                 'orden_id' => $ordenServicio->id,
                 'folio' => $ordenServicio->folio,
@@ -386,7 +387,7 @@ class InternalServiceOrderController extends Controller
                 'notas' => $refaccion->notas,
             ])->values()->all(),
             'total_cliente' => (float) $orden->total_cliente,
-            'costo_tecnico' => (float) $orden->costo_tecnico,
+            'costo_tecnico' => $orden->costo_tecnico === null ? null : (float) $orden->costo_tecnico,
             'costos_incompletos' => (bool) $orden->costos_incompletos,
             'finanzas_generadas' => (bool) $orden->finanzas_generadas,
             'fecha_recepcion' => $orden->fecha_recepcion?->toIso8601String(),

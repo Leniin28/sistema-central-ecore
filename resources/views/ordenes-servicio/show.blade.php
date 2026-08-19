@@ -107,7 +107,9 @@
 
                 <div>
                     <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Costo técnico</dt>
-                    <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">${{ number_format($orden->costo_tecnico, 2) }}</dd>
+                    <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">
+                        {{ $orden->costo_tecnico === null ? 'Pendiente' : '$'.number_format($orden->costo_tecnico, 2) }}
+                    </dd>
                 </div>
 
                 <div>

@@ -55,7 +55,6 @@ class OrdenServicioController extends Controller
     {
         abort_if(auth()->user()->hasRole('socio_tecnico'), 403);
         $data = $this->validatedData($request);
-        $data['costo_tecnico'] = 0;
         $orden = $crearOrden->ejecutar(
             $data,
             $this->validatedDetalles($request),
@@ -213,7 +212,9 @@ class OrdenServicioController extends Controller
         foreach (['equipo_id', 'partner_recepcion_id', 'partner_tecnico_id'] as $campo) {
             $data[$campo] = $data[$campo] ?? null;
         }
-        $data['costo_tecnico'] = $data['costo_tecnico'] ?? 0;
+        $data['costo_tecnico'] = isset($data['costo_tecnico']) && $data['costo_tecnico'] !== ''
+            ? $data['costo_tecnico']
+            : null;
 
         return $data;
     }

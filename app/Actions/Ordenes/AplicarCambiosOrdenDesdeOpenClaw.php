@@ -203,7 +203,8 @@ class AplicarCambiosOrdenDesdeOpenClaw
                 'costo_unitario' => $refaccion->costo_unitario,
                 'precio_unitario_cliente' => $refaccion->precio_unitario_cliente,
             ])->all(),
-            (float) $orden->costo_tecnico,
+            $orden->costo_tecnico === null ? null : (float) $orden->costo_tecnico,
+            tienePartnerTecnico: $orden->partner_tecnico_id !== null,
         );
 
         $orden->update([

@@ -186,6 +186,9 @@
                     value="{{ old('costo_tecnico', $orden->costo_tecnico) }}"
                     class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
                 >
+                <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+                    Déjalo vacío mientras el costo esté pendiente. Escribe 0 únicamente si Fixop confirmó que no cobrará el trabajo.
+                </p>
             @endif
 
             @error('costo_tecnico')
