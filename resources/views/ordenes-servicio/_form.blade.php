@@ -22,7 +22,7 @@
 
     $servicioRows = array_values($servicioRows);
 
-    while (count($servicioRows) < 5) {
+    if ($servicioRows === []) {
         $servicioRows[] = [];
     }
 
@@ -43,7 +43,7 @@
 
     $refaccionRows = array_values($refaccionRows);
 
-    while (count($refaccionRows) < 5) {
+    if ($refaccionRows === []) {
         $refaccionRows[] = [];
     }
 @endphp
@@ -207,108 +207,19 @@
             <p class="mt-3 text-sm text-red-600">{{ $message }}</p>
         @enderror
 
-        <div class="mt-5 grid gap-4">
+        <div class="mt-5 grid gap-4" data-service-rows>
             @foreach ($servicioRows as $index => $row)
-                <div class="grid gap-3 rounded-md border border-neutral-200 p-4 dark:border-neutral-700 lg:grid-cols-12">
-                    <div class="lg:col-span-2">
-                        <label for="servicios_{{ $index }}_servicio_id" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Servicio</label>
-                        <select
-                            id="servicios_{{ $index }}_servicio_id"
-                            name="servicios[{{ $index }}][servicio_id]"
-                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                        >
-                            <option value="">Servicio del catálogo (opcional)</option>
-                            @foreach ($servicios as $servicio)
-                                <option value="{{ $servicio->id }}" data-name="{{ $servicio->nombre }}" data-price="{{ $servicio->precio_base }}" @selected((int) ($row['servicio_id'] ?? 0) === $servicio->id)>
-                                    {{ $servicio->nombre }} - ${{ number_format($servicio->precio_base, 2) }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error("servicios.$index.servicio_id")
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="lg:col-span-3">
-                        <label for="servicios_{{ $index }}_descripcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Descripción vendida</label>
-                        <input
-                            id="servicios_{{ $index }}_descripcion"
-                            name="servicios[{{ $index }}][descripcion]"
-                            type="text"
-                            maxlength="255"
-                            value="{{ $row['descripcion'] ?? '' }}"
-                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                        >
-                        @error("servicios.$index.descripcion")
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="lg:col-span-1">
-                        <label for="servicios_{{ $index }}_cantidad" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Cantidad</label>
-                        <input
-                            id="servicios_{{ $index }}_cantidad"
-                            name="servicios[{{ $index }}][cantidad]"
-                            type="number"
-                            min="1"
-                            value="{{ $row['cantidad'] ?? '' }}"
-                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                        >
-                        @error("servicios.$index.cantidad")
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    @if (auth()->user()->isAdmin())
-                        <div class="lg:col-span-2">
-                            <label for="servicios_{{ $index }}_costo_unitario" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Costo interno unitario</label>
-                            <input
-                                id="servicios_{{ $index }}_costo_unitario"
-                                name="servicios[{{ $index }}][costo_unitario]"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value="{{ $row['costo_unitario'] ?? '' }}"
-                                class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                            >
-                            @error("servicios.$index.costo_unitario")
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-                    @endif
-
-                    <div class="lg:col-span-2">
-                        <label for="servicios_{{ $index }}_precio_unitario" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Precio unitario</label>
-                        <input
-                            id="servicios_{{ $index }}_precio_unitario"
-                            name="servicios[{{ $index }}][precio_unitario]"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value="{{ $row['precio_unitario'] ?? '' }}"
-                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                        >
-                        @error("servicios.$index.precio_unitario")
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="lg:col-span-2">
-                        <label for="servicios_{{ $index }}_notas" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Notas</label>
-                        <input
-                            id="servicios_{{ $index }}_notas"
-                            name="servicios[{{ $index }}][notas]"
-                            type="text"
-                            value="{{ $row['notas'] ?? '' }}"
-                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                        >
-                        @error("servicios.$index.notas")
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-                </div>
+                @include('ordenes-servicio._servicio-row', ['isTemplate' => false])
             @endforeach
         </div>
+
+        <button type="button" data-add-row="service" class="mt-4 rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800">
+            + Agregar servicio
+        </button>
+
+        <template data-row-template="service">
+            @include('ordenes-servicio._servicio-row', ['index' => '__INDEX__', 'row' => [], 'isTemplate' => true])
+        </template>
     </section>
 
     <section class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
@@ -327,92 +238,21 @@
             <p class="mt-3 text-sm text-red-600">{{ $message }}</p>
         @enderror
 
-        <div class="mt-5 grid gap-5">
+        <div class="mt-5 grid gap-4" data-part-rows>
             @foreach ($refaccionRows as $index => $row)
-                <div class="grid grid-cols-1 gap-x-4 gap-y-4 rounded-md border border-neutral-200 bg-neutral-50/50 p-4 dark:border-neutral-700 dark:bg-neutral-900/30 md:grid-cols-12">
-                    <div class="md:col-span-3">
-                        <label for="refacciones_{{ $index }}_descripcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Descripcion</label>
-                        <input
-                            id="refacciones_{{ $index }}_descripcion"
-                            name="refacciones[{{ $index }}][descripcion]"
-                            type="text"
-                            maxlength="255"
-                            value="{{ $row['descripcion'] ?? '' }}"
-                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm disabled:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:disabled:bg-neutral-900 dark:disabled:text-neutral-300"
-                            @disabled($refaccionesReadonly)
-                        >
-                        @error("refacciones.$index.descripcion")
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="md:col-span-1">
-                        <label for="refacciones_{{ $index }}_cantidad" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Cantidad</label>
-                        <input
-                            id="refacciones_{{ $index }}_cantidad"
-                            name="refacciones[{{ $index }}][cantidad]"
-                            type="number"
-                            min="1"
-                            value="{{ $row['cantidad'] ?? '' }}"
-                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm disabled:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:disabled:bg-neutral-900 dark:disabled:text-neutral-300"
-                            @disabled($refaccionesReadonly)
-                        >
-                        @error("refacciones.$index.cantidad")
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="md:col-span-2">
-                        <label for="refacciones_{{ $index }}_costo_unitario" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Costo unitario</label>
-                        <input
-                            id="refacciones_{{ $index }}_costo_unitario"
-                            name="refacciones[{{ $index }}][costo_unitario]"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value="{{ $row['costo_unitario'] ?? '' }}"
-                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm disabled:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:disabled:bg-neutral-900 dark:disabled:text-neutral-300"
-                            @disabled($refaccionesReadonly)
-                        >
-                        @error("refacciones.$index.costo_unitario")
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="md:col-span-2">
-                        <label for="refacciones_{{ $index }}_precio_unitario_cliente" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Precio cliente</label>
-                        <input
-                            id="refacciones_{{ $index }}_precio_unitario_cliente"
-                            name="refacciones[{{ $index }}][precio_unitario_cliente]"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value="{{ $row['precio_unitario_cliente'] ?? '' }}"
-                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm disabled:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:disabled:bg-neutral-900 dark:disabled:text-neutral-300"
-                            @disabled($refaccionesReadonly)
-                        >
-                        @error("refacciones.$index.precio_unitario_cliente")
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="md:col-span-4">
-                        <label for="refacciones_{{ $index }}_notas" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Notas</label>
-                        <input
-                            id="refacciones_{{ $index }}_notas"
-                            name="refacciones[{{ $index }}][notas]"
-                            type="text"
-                            value="{{ $row['notas'] ?? '' }}"
-                            class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm disabled:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:disabled:bg-neutral-900 dark:disabled:text-neutral-300"
-                            @disabled($refaccionesReadonly)
-                        >
-                        @error("refacciones.$index.notas")
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-                </div>
+                @include('ordenes-servicio._refaccion-row', ['isTemplate' => false])
             @endforeach
         </div>
+
+        @unless ($refaccionesReadonly)
+            <button type="button" data-add-row="part" class="mt-4 rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800">
+                + Agregar refacción
+            </button>
+
+            <template data-row-template="part">
+                @include('ordenes-servicio._refaccion-row', ['index' => '__INDEX__', 'row' => [], 'isTemplate' => true])
+            </template>
+        @endunless
     </section>
 </div>
 
@@ -442,38 +282,91 @@
         const form = orderForm;
         if (!form) return;
         const money = value => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value || 0);
+        const rowTypes = {
+            service: {
+                list: form.querySelector('[data-service-rows]'),
+                template: form.querySelector('[data-row-template="service"]'),
+                rowSelector: '[data-service-row]',
+            },
+            part: {
+                list: form.querySelector('[data-part-rows]'),
+                template: form.querySelector('[data-row-template="part"]'),
+                rowSelector: '[data-part-row]',
+            },
+        };
+
+        const nextIndex = config => Math.max(
+            -1,
+            ...Array.from(config.list.querySelectorAll(config.rowSelector))
+                .map(row => Number(row.dataset.rowIndex))
+                .filter(Number.isFinite),
+        ) + 1;
+
+        const syncRows = config => {
+            const rows = Array.from(config.list.querySelectorAll(config.rowSelector));
+            rows.forEach((row, index) => {
+                const number = row.querySelector('[data-row-number]');
+                if (number) number.textContent = index + 1;
+                const remove = row.querySelector('[data-remove-row]');
+                if (remove) remove.disabled = rows.length === 1;
+            });
+        };
+
+        const addRow = type => {
+            const config = rowTypes[type];
+            if (!config?.template) return;
+            const index = nextIndex(config);
+            config.list.insertAdjacentHTML('beforeend', config.template.innerHTML.replaceAll('__INDEX__', String(index)));
+            syncRows(config);
+            config.list.querySelector(`${config.rowSelector}:last-child [data-row-primary]`)?.focus();
+        };
+
         const calculate = () => {
             let services = 0, parts = 0, costs = 0;
-            form.querySelectorAll('input[name^="servicios"][name$="[descripcion]"]').forEach(input => {
-                if (!input.value.trim()) return;
-                const index = input.name.match(/\[(\d+)\]/)[1];
-                const quantity = Number(form.querySelector(`[name="servicios[${index}][cantidad]"]`)?.value) || 0;
-                const price = Number(form.querySelector(`[name="servicios[${index}][precio_unitario]"]`)?.value) || 0;
+            rowTypes.service.list.querySelectorAll(rowTypes.service.rowSelector).forEach(row => {
+                if (!row.querySelector('[name$="[descripcion]"]')?.value.trim()) return;
+                const quantity = Number(row.querySelector('[name$="[cantidad]"]')?.value) || 0;
+                const price = Number(row.querySelector('[name$="[precio_unitario]"]')?.value) || 0;
                 services += quantity * price;
             });
-            form.querySelectorAll('input[name^="refacciones"][name$="[descripcion]"]').forEach(input => {
-                if (!input.value.trim()) return;
-                const index = input.name.match(/\[(\d+)\]/)[1];
-                const quantity = Number(form.querySelector(`[name="refacciones[${index}][cantidad]"]`)?.value) || 0;
-                costs += quantity * (Number(form.querySelector(`[name="refacciones[${index}][costo_unitario]"]`)?.value) || 0);
-                parts += quantity * (Number(form.querySelector(`[name="refacciones[${index}][precio_unitario_cliente]"]`)?.value) || 0);
+            rowTypes.part.list.querySelectorAll(rowTypes.part.rowSelector).forEach(row => {
+                if (!row.querySelector('[name$="[descripcion]"]')?.value.trim()) return;
+                const quantity = Number(row.querySelector('[name$="[cantidad]"]')?.value) || 0;
+                costs += quantity * (Number(row.querySelector('[name$="[costo_unitario]"]')?.value) || 0);
+                parts += quantity * (Number(row.querySelector('[name$="[precio_unitario_cliente]"]')?.value) || 0);
             });
             document.getElementById('order-total-services').textContent = money(services);
             document.getElementById('order-total-parts').textContent = money(parts);
             document.getElementById('order-cost-parts').textContent = money(costs);
             document.getElementById('order-total').textContent = money(services + parts);
         };
+        form.addEventListener('click', event => {
+            if (!(event.target instanceof Element)) return;
+            const addButton = event.target.closest('[data-add-row]');
+            if (addButton) {
+                addRow(addButton.dataset.addRow);
+                return;
+            }
+
+            const removeButton = event.target.closest('[data-remove-row]');
+            if (!removeButton || removeButton.disabled) return;
+            const config = rowTypes[removeButton.dataset.removeRow];
+            removeButton.closest(config.rowSelector)?.remove();
+            syncRows(config);
+            calculate();
+        });
         form.addEventListener('change', event => {
             if (event.target.matches('select[name^="servicios"][name$="[servicio_id]"]')) {
-                const index = event.target.name.match(/\[(\d+)\]/)[1];
-                const price = form.querySelector(`[name="servicios[${index}][precio_unitario]"]`);
+                const row = event.target.closest('[data-service-row]');
+                const price = row.querySelector('[name$="[precio_unitario]"]');
                 if (event.target.value && !price.value) price.value = event.target.selectedOptions[0].dataset.price || '';
-                const description = form.querySelector(`[name="servicios[${index}][descripcion]"]`);
+                const description = row.querySelector('[name$="[descripcion]"]');
                 if (event.target.value && description && !description.value) description.value = event.target.selectedOptions[0].dataset.name || '';
             }
             calculate();
         });
         form.addEventListener('input', calculate);
+        Object.values(rowTypes).forEach(syncRows);
         calculate();
     });
 </script>

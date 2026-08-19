@@ -5,7 +5,7 @@
             <p class="text-sm text-neutral-600 dark:text-neutral-400">Actualiza los datos base de la orden. El estado no cambia desde esta pantalla.</p>
         </section>
 
-        <section class="max-w-3xl">
+        <section class="max-w-7xl">
             <form method="POST" action="{{ route('admin.ordenes-servicio.update', $orden) }}" class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
                 @method('PUT')
                 @include('ordenes-servicio._form')
