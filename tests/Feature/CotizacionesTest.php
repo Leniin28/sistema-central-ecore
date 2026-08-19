@@ -83,6 +83,62 @@ test('admin puede crear una cotizacion con varios items', function () {
         ->and($cotizacion->equipo_id)->toBe($datos['equipo']->id);
 });
 
+test('cliente Fernanda recien creado puede vincularse a una cotizacion', function () {
+    $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $fernanda = Cliente::create([
+        'nombre' => 'Fernanda',
+        'telefono' => '4491239876',
+        'tipo_cliente' => 'mantenimiento',
+    ]);
+
+    $this->actingAs($admin)
+        ->post(route('admin.cotizaciones.store'), [
+            'cliente_id' => $fernanda->id,
+            'fecha' => today()->format('Y-m-d'),
+            'items' => itemsCotizacion(),
+        ])
+        ->assertRedirect();
+
+    expect(Cotizacion::sole()->cliente_id)->toBe($fernanda->id);
+});
+
+test('texto de cliente sin seleccion muestra un mensaje entendible', function () {
+    $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+
+    $this->actingAs($admin)
+        ->from(route('admin.cotizaciones.create'))
+        ->post(route('admin.cotizaciones.store'), [
+            'fecha' => today()->format('Y-m-d'),
+            'items' => itemsCotizacion(),
+        ])
+        ->assertRedirect(route('admin.cotizaciones.create'))
+        ->assertSessionHasErrors([
+            'cliente_id' => 'Selecciona un cliente de los resultados de búsqueda.',
+        ]);
+
+    expect(Cotizacion::count())->toBe(0);
+});
+
+test('un equipo no puede permanecer vinculado al cambiar a otro cliente', function () {
+    $datos = datosCotizacion();
+    $otroCliente = Cliente::create([
+        'nombre' => 'Cliente distinto',
+        'telefono' => '4495554444',
+        'tipo_cliente' => 'mantenimiento',
+    ]);
+
+    $this->actingAs($datos['admin'])
+        ->post(route('admin.cotizaciones.store'), [
+            'cliente_id' => $otroCliente->id,
+            'equipo_id' => $datos['equipo']->id,
+            'fecha' => today()->format('Y-m-d'),
+            'items' => itemsCotizacion(),
+        ])
+        ->assertSessionHasErrors('equipo_id');
+
+    expect(Cotizacion::count())->toBe(0);
+});
+
 test('los totales se calculan en el servidor', function () {
     $datos = datosCotizacion();
 

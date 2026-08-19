@@ -31,7 +31,7 @@
         aria-controls="{{ $id }}_results"
     >
     <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400" data-searchable-hint>Escribe para buscar; sin texto muestra los más recientes.</p>
-    <ul id="{{ $id }}_results" class="mt-1 hidden max-h-52 overflow-auto rounded-md border border-neutral-200 bg-white py-1 shadow-sm dark:border-neutral-700 dark:bg-neutral-900" role="listbox"></ul>
+    <ul id="{{ $id }}_results" class="mt-1 max-h-52 overflow-auto rounded-md border border-neutral-200 bg-white py-1 shadow-sm dark:border-neutral-700 dark:bg-neutral-900" role="listbox" hidden></ul>
 </div>
 
 @once
@@ -55,13 +55,17 @@
                     input.setAttribute('aria-expanded', 'false');
                 };
 
+                const notifyChange = value => {
+                    window.dispatchEvent(new CustomEvent('ecore-searchable-select:change', {
+                        detail: { name: hidden.name, value },
+                    }));
+                };
+
                 const select = item => {
                     hidden.value = item.value;
                     input.value = item.label;
                     close();
-                    window.dispatchEvent(new CustomEvent('ecore-searchable-select:change', {
-                        detail: { name: hidden.name, value: item.value },
-                    }));
+                    notifyChange(item.value);
                 };
 
                 const search = async () => {
@@ -102,7 +106,9 @@
                 setEnabled(!dependency || Boolean(document.querySelector(`[name="${dependency}"]`)?.value));
                 input.addEventListener('focus', () => search());
                 input.addEventListener('input', () => {
+                    const hadSelection = hidden.value !== '';
                     hidden.value = '';
+                    if (hadSelection) notifyChange('');
                     clearTimeout(timer);
                     timer = setTimeout(search, 200);
                 });

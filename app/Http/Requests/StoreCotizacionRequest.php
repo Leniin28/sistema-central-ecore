@@ -62,6 +62,8 @@ class StoreCotizacionRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'cliente_id.required' => 'Selecciona un cliente de los resultados de búsqueda.',
+            'cliente_id.exists' => 'Selecciona un cliente válido de los resultados de búsqueda.',
             'direccion_recepcion.required_if' => 'Captura la dirección del cliente cuando el equipo se recoge a domicilio.',
         ];
     }

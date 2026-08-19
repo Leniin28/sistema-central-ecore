@@ -24,6 +24,31 @@ test('admin searches clients by name or phone and receives recent results', func
         ->assertJsonPath('data.0.value', (string) $telefono->id);
 });
 
+test('a newly created Fernanda is searchable by name phone and recent clients', function () {
+    $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $fernanda = Cliente::create([
+        'nombre' => 'Fernanda',
+        'telefono' => '4491239876',
+        'tipo_cliente' => 'mantenimiento',
+    ]);
+
+    $this->actingAs($admin)
+        ->getJson(route('admin.clientes.buscar', ['q' => 'Fernanda']))
+        ->assertOk()
+        ->assertJsonPath('data.0.value', (string) $fernanda->id)
+        ->assertJsonPath('data.0.label', 'Fernanda · 4491239876');
+
+    $this->actingAs($admin)
+        ->getJson(route('admin.clientes.buscar', ['q' => '1239876']))
+        ->assertOk()
+        ->assertJsonPath('data.0.value', (string) $fernanda->id);
+
+    $this->actingAs($admin)
+        ->getJson(route('admin.clientes.buscar'))
+        ->assertOk()
+        ->assertJsonPath('data.0.value', (string) $fernanda->id);
+});
+
 test('equipment search only returns equipment owned by the selected client', function () {
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
     $cliente = Cliente::create(['nombre' => 'Rosa Hernández', 'telefono' => '4491112233', 'tipo_cliente' => 'mantenimiento']);
@@ -53,6 +78,17 @@ test('operational forms render searchable selectors instead of all client record
         ->assertOk()
         ->assertSee('Escribe para buscar')
         ->assertDontSee($cliente->nombre);
+});
+
+test('quote client search results can become visible', function () {
+    $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.cotizaciones.create'))
+        ->assertOk()
+        ->assertSee('id="cliente_id_results" class="mt-1 max-h-52', false)
+        ->assertDontSee('id="cliente_id_results" class="mt-1 hidden', false)
+        ->assertSee('if (hadSelection) notifyChange', false);
 });
 
 test('technical partners cannot use operational search endpoints', function () {
