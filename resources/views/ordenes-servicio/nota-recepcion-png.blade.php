@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="utf-8">
-    <title>Nota de recepciÃ³n {{ $orden->folio }}</title>
+    <meta charset="UTF-8">
+    <title>Nota de recepción {{ $orden->folio }}</title>
     <style>
         html, body { margin: 0; padding: 0; background: #ffffff; }
-        .lienzo { width: 800px; margin: 0 auto; padding: 36px 40px; background: #ffffff; }
+        .lienzo { box-sizing: border-box; width: 100vw; min-height: 100vh; margin: 0; padding: 38px 42px; background: #ffffff; }
     </style>
 </head>
 <body>

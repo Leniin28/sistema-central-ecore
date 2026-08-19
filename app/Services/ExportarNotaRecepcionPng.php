@@ -15,6 +15,10 @@ use Symfony\Component\Process\Process;
  */
 class ExportarNotaRecepcionPng
 {
+    private const ANCHO_VIEWPORT = 1123;
+
+    private const ALTO_VIEWPORT = 794;
+
     /** @var list<string> */
     private const RUTAS_WINDOWS = [
         'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
@@ -32,7 +36,7 @@ class ExportarNotaRecepcionPng
 
         if ($navegador === null) {
             throw new RuntimeException(
-                'No se encontrÃ³ un navegador para generar el PNG. Instala Microsoft Edge o Google Chrome, '
+                'No se encontró un navegador para generar el PNG. Instala Microsoft Edge o Google Chrome, '
                 .'o define COTIZACIONES_BROWSER_BIN en el archivo .env con la ruta del ejecutable.',
             );
         }
@@ -60,7 +64,7 @@ class ExportarNotaRecepcionPng
                 '--no-sandbox',
                 '--hide-scrollbars',
                 '--force-device-scale-factor=2',
-                '--window-size=880,1800',
+                '--window-size='.self::ANCHO_VIEWPORT.','.self::ALTO_VIEWPORT,
                 '--screenshot='.$rutaPng,
                 'file:///'.str_replace('\\', '/', $rutaHtml),
             ]);
@@ -69,7 +73,7 @@ class ExportarNotaRecepcionPng
 
             if (! is_file($rutaPng)) {
                 throw new RuntimeException(
-                    'El navegador no pudo generar el PNG de la nota de recepciÃ³n: '
+                    'El navegador no pudo generar el PNG de la nota de recepción: '
                     .Str::limit(trim($proceso->getErrorOutput()) ?: 'sin detalle', 300),
                 );
             }

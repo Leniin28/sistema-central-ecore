@@ -16,7 +16,7 @@ class ExportarNotaRecepcionPdf
         return Pdf::loadView('ordenes-servicio.nota-recepcion-pdf', [
             'orden' => $orden,
             'negocio' => config('negocio'),
-        ])->setPaper('letter');
+        ])->setPaper('a4', 'landscape');
     }
 
     public function nombreArchivo(OrdenServicio $orden): string

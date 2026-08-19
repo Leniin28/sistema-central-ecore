@@ -10,6 +10,7 @@ use App\Models\Equipo;
 use App\Models\Partner;
 use App\Models\Servicio;
 use App\Models\User;
+use App\Services\ExportarNotaRecepcionPdf;
 use App\Services\ExportarNotaRecepcionPng;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -17,20 +18,20 @@ uses(RefreshDatabase::class);
 
 function datosNotaRecepcion(): array
 {
-    $partnerLogistico = Partner::create(['nombre' => 'LogÃ­stica nota', 'tipo_socio' => 'logistico', 'comision_fija' => 0, 'activo' => true]);
-    $partnerTecnico = Partner::create(['nombre' => 'TÃ©cnico nota', 'tipo_socio' => 'tecnico', 'comision_fija' => 0, 'activo' => true]);
-    $cliente = Cliente::create(['nombre' => 'MarÃ­a LÃ³pez', 'telefono' => '4495551234', 'tipo_cliente' => 'mantenimiento']);
+    $partnerLogistico = Partner::create(['nombre' => 'Logística nota', 'tipo_socio' => 'logistico', 'comision_fija' => 0, 'activo' => true]);
+    $partnerTecnico = Partner::create(['nombre' => 'Técnico nota', 'tipo_socio' => 'tecnico', 'comision_fija' => 0, 'activo' => true]);
+    $cliente = Cliente::create(['nombre' => 'José Hernández', 'telefono' => '4495551234', 'tipo_cliente' => 'mantenimiento']);
     $equipo = Equipo::create([
         'cliente_id' => $cliente->id,
         'tipo_equipo' => 'Laptop',
         'marca' => 'Lenovo',
         'modelo' => 'ThinkPad T14',
         'numero_serie' => 'SN-12345',
-        'accesorios_recibidos' => 'Cargador y funda',
-        'estado_fisico_inicial' => 'Rayones leves en tapa',
+        'accesorios_recibidos' => 'Cargador y cable de conexión',
+        'estado_fisico_inicial' => 'Rayón pequeño; etiqueta de Niño en la tapa',
     ]);
-    $categoria = CategoriaServicio::create(['nombre' => 'DiagnÃ³stico']);
-    $servicio = Servicio::create(['categoria_servicio_id' => $categoria->id, 'nombre' => 'DiagnÃ³stico', 'precio_base' => 0, 'activo' => true]);
+    $categoria = CategoriaServicio::create(['nombre' => 'Diagnóstico']);
+    $servicio = Servicio::create(['categoria_servicio_id' => $categoria->id, 'nombre' => 'Diagnóstico', 'precio_base' => 0, 'activo' => true]);
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
     $logistico = User::factory()->create(['role' => 'socio_logistico', 'partner_id' => $partnerLogistico->id, 'email_verified_at' => now()]);
     $tecnico = User::factory()->create(['role' => 'socio_tecnico', 'partner_id' => $partnerTecnico->id, 'email_verified_at' => now()]);
@@ -43,7 +44,7 @@ function datosNotaRecepcion(): array
         'partner_tecnico_id' => $partnerTecnico->id,
         'tipo_recepcion' => 'domicilio',
         'costo_tecnico' => 0,
-        'notas' => "Problema reportado:\nNo enciende al conectar el cargador.\n\nNotas internas:\nSe recoge en domicilio.",
+        'notas' => "Problema reportado:\nReparación de conexión y diagnóstico.\n\nNotas internas:\nObservación: se recoge en domicilio.",
     ], [[
         'servicio_id' => $servicio->id,
         'cantidad' => 1,
@@ -59,20 +60,51 @@ test('usuario autorizado puede ver la nota de recepcion con datos de cliente, eq
     $this->actingAs($datos['admin'])
         ->get(route('admin.ordenes-servicio.nota-recepcion', $datos['orden']))
         ->assertOk()
-        ->assertSee('NOTA DE RECEPCIÃ“N')
+        ->assertSee('NOTA DE RECEPCIÓN')
         ->assertSee($datos['orden']->folio)
-        ->assertSee('MarÃ­a LÃ³pez')
+        ->assertSee('José Hernández')
         ->assertSee('4495551234')
         ->assertSee('Laptop')
         ->assertSee('Lenovo')
         ->assertSee('ThinkPad T14')
         ->assertSee('SN-12345')
-        ->assertSee('Cargador y funda')
-        ->assertSee('Rayones leves en tapa')
-        ->assertSee('No enciende al conectar el cargador.')
-        ->assertSee('Se recoge en domicilio.')
+        ->assertSee('Cargador y cable de conexión')
+        ->assertSee('Rayón pequeño; etiqueta de Niño en la tapa')
+        ->assertSee('Reparación de conexión y diagnóstico.')
+        ->assertSee('Observación: se recoge en domicilio.')
         ->assertSee('RECIBE')
         ->assertSee('ENTREGA');
+});
+
+test('vista imprimible y fuentes de exportacion conservan utf8 y orientacion landscape', function () {
+    $datos = datosNotaRecepcion();
+
+    $response = $this->actingAs($datos['admin'])
+        ->get(route('admin.ordenes-servicio.nota-recepcion', $datos['orden']));
+
+    $response->assertOk()
+        ->assertHeader('content-type', 'text/html; charset=UTF-8')
+        ->assertSee('@page { size: A4 landscape;', false)
+        ->assertSee('NOTA DE RECEPCIÓN')
+        ->assertSee('Número de serie')
+        ->assertSee('Teléfono')
+        ->assertSee('José Hernández')
+        ->assertSee('Reparación de conexión y diagnóstico.')
+        ->assertDontSee('Ã');
+
+    $htmlPdf = view('ordenes-servicio.nota-recepcion-pdf', [
+        'orden' => $datos['orden']->loadMissing(['cliente', 'equipo']),
+        'negocio' => config('negocio'),
+    ])->render();
+    $htmlPng = view('ordenes-servicio.nota-recepcion-png', [
+        'orden' => $datos['orden'],
+        'negocio' => config('negocio'),
+    ])->render();
+
+    expect($htmlPdf)->toContain('<meta charset="UTF-8">', 'NOTA DE RECEPCIÓN', 'José Hernández', 'diagnóstico')
+        ->not->toContain('Ã')
+        ->and($htmlPng)->toContain('<meta charset="UTF-8">', 'NOTA DE RECEPCIÓN', 'José Hernández', 'Niño')
+        ->not->toContain('Ã');
 });
 
 test('usuarios que pueden consultar la orden pueden acceder a su nota', function () {
@@ -209,6 +241,35 @@ test('la ruta de PDF descarga la nota de recepcion', function () {
 
     $response->assertOk()->assertHeader('content-type', 'application/pdf');
     expect($response->headers->get('content-disposition'))->toContain('nota-recepcion-'.$datos['orden']->folio.'.pdf');
+    expect($response->getContent())->toStartWith('%PDF-');
+});
+
+test('el exportador PDF genera una sola pagina A4 horizontal', function () {
+    $datos = datosNotaRecepcion();
+    $documento = app(ExportarNotaRecepcionPdf::class)->generar($datos['orden']);
+    $contenido = $documento->output();
+    $canvas = $documento->getDomPDF()->getCanvas();
+
+    expect($contenido)->toStartWith('%PDF-')
+        ->and($canvas->get_width())->toBeGreaterThan($canvas->get_height())
+        ->and($canvas->get_page_count())->toBe(1);
+});
+
+test('la nota sigue disponible para una orden sin servicios', function () {
+    $datos = datosNotaRecepcion();
+    $datos['orden']->detalles()->delete();
+
+    expect($datos['orden']->detalles()->count())->toBe(0);
+
+    $this->actingAs($datos['admin'])
+        ->get(route('admin.ordenes-servicio.nota-recepcion', $datos['orden']))
+        ->assertOk()
+        ->assertSee('NOTA DE RECEPCIÓN');
+
+    $this->actingAs($datos['admin'])
+        ->get(route('admin.ordenes-servicio.nota-recepcion.pdf', $datos['orden']))
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
 });
 
 test('la ruta de PNG descarga la nota de recepcion', function () {
@@ -234,8 +295,16 @@ test('la exportacion PNG real genera una imagen valida para la nota de recepcion
     }
 
     $datos = datosNotaRecepcion();
+    $patronTemporales = storage_path('app'.DIRECTORY_SEPARATOR.'notas-recepcion-png'.DIRECTORY_SEPARATOR.'nota-recepcion-'.$datos['orden']->id.'-*');
+    $temporalesAntes = glob($patronTemporales) ?: [];
     $imagen = $exportador->generar($datos['orden']);
+    $dimensiones = getimagesizefromstring($imagen);
+    $temporalesDespues = glob($patronTemporales) ?: [];
 
     expect(substr($imagen, 0, 8))->toBe("\x89PNG\r\n\x1a\n")
-        ->and(strlen($imagen))->toBeGreaterThan(10000);
+        ->and(strlen($imagen))->toBeGreaterThan(10000)
+        ->and($dimensiones)->not->toBeFalse()
+        ->and($dimensiones[0])->toBeGreaterThan($dimensiones[1])
+        ->and($dimensiones[0] / $dimensiones[1])->toEqualWithDelta(1123 / 794, 0.02)
+        ->and($temporalesDespues)->toBe($temporalesAntes);
 });
