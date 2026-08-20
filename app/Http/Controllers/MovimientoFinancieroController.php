@@ -49,7 +49,7 @@ class MovimientoFinancieroController extends Controller
         ]);
 
         $query = MovimientoFinanciero::query()
-            ->with(['ordenServicio', 'cliente', 'partner']);
+            ->with(['ordenServicio', 'cotizacion', 'cliente', 'partner']);
 
         $this->applyFilters($query, $filters);
 
@@ -65,7 +65,7 @@ class MovimientoFinancieroController extends Controller
 
         return view('movimientos-financieros.index', [
             'movimientos' => $movimientos,
-            'categorias' => self::CATEGORIAS,
+            'categorias' => [...self::CATEGORIAS, 'anticipo'],
             'filters' => $filters,
             'totalIngresos' => $totalIngresos,
             'totalEgresos' => $totalEgresos,

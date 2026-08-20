@@ -15,6 +15,7 @@ class ActualizarCotizacion
         private CalcularTotalesCotizacion $calculadora,
         private VincularCotizacionAOrden $vincularOrden,
         private SincronizarLineasCotizacionConOrden $sincronizarLineas,
+        private RegistrarAnticipoCotizacion $registrarAnticipo,
     ) {}
 
     /**
@@ -49,6 +50,7 @@ class ActualizarCotizacion
             }
 
             $this->validarEquipo($data);
+            $anticipoAnterior = (float) $cotizacion->anticipo;
             $recepcion = $this->resolverRecepcion($data, $cotizacion);
             $resumen = $this->calculadora->resumen(
                 $items,
@@ -79,6 +81,13 @@ class ActualizarCotizacion
                 $this->vincularOrden->vincular($cotizacion, $ordenId, $actor);
             }
 
+            $this->registrarAnticipo->registrarCambio(
+                $cotizacion,
+                $anticipoAnterior,
+                (float) $cotizacion->anticipo,
+                $actor,
+            );
+
             Log::info('Cotización actualizada', [
                 'cotizacion_id' => $cotizacion->id,
                 'folio' => $cotizacion->folio,
@@ -96,6 +105,7 @@ class ActualizarCotizacion
     private function actualizarAceptada(Cotizacion $cotizacion, array $data, array $items, User $actor): Cotizacion
     {
         abort_unless($actor->isAdmin(), 403);
+        $anticipoAnterior = (float) $cotizacion->anticipo;
 
         $orden = $cotizacion->ordenServicio()->lockForUpdate()->first();
         if (! $orden) {
@@ -138,7 +148,7 @@ class ActualizarCotizacion
         $resumen = $this->calculadora->resumen(
             $itemsCalculados,
             (float) $cotizacion->descuento,
-            (float) $cotizacion->anticipo,
+            (float) ($data['anticipo'] ?? $cotizacion->anticipo),
         );
         $recepcion = $this->resolverRecepcion($data, $cotizacion);
 
@@ -174,6 +184,12 @@ class ActualizarCotizacion
 
         $cotizacion->unsetRelation('items');
         $this->sincronizarLineas->sincronizar($orden, $cotizacion);
+        $this->registrarAnticipo->registrarCambio(
+            $cotizacion,
+            $anticipoAnterior,
+            (float) $cotizacion->anticipo,
+            $actor,
+        );
 
         Log::info('Cotización aceptada sincronizada con su orden', [
             'cotizacion_id' => $cotizacion->id,

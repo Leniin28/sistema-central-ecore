@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Actions\Cotizaciones\RegistrarAnticipoCotizacion;
 use App\Actions\Ordenes\ValidarCostoTecnicoParaEntrega;
 use App\Models\MovimientoFinanciero;
 use App\Models\OrdenServicio;
@@ -29,20 +30,44 @@ class GenerarFinanzasOrdenServicio
 
             $this->validarCostoTecnico->ejecutar($orden);
 
-            if ($orden->movimientosFinancieros()->exists()) {
+            $movimientosExistentes = $orden->movimientosFinancieros()->lockForUpdate()->get();
+            $movimientosIncompatibles = $movimientosExistentes->filter(fn (MovimientoFinanciero $movimiento): bool => $movimiento->tipo !== 'ingreso'
+                || $movimiento->categoria !== RegistrarAnticipoCotizacion::CATEGORIA
+                || $orden->cotizacion_id === null
+                || (int) $movimiento->cotizacion_id !== (int) $orden->cotizacion_id
+            );
+
+            if ($movimientosIncompatibles->isNotEmpty()) {
                 throw ValidationException::withMessages([
                     'estado_nuevo' => 'La orden ya tiene movimientos financieros asociados. Revisa su historial antes de continuar.',
                 ]);
             }
 
-            $orden->loadMissing(['partnerRecepcion', 'partnerTecnico', 'detalles', 'refacciones']);
+            $orden->loadMissing(['cotizacion', 'partnerRecepcion', 'partnerTecnico', 'detalles', 'refacciones']);
             $totalCliente = (float) $orden->total_cliente;
             $comisionLogistica = (float) ($orden->partnerRecepcion?->comision_fija ?? 0);
             $costoTecnico = (float) ($orden->costo_tecnico ?? 0);
             $totalCostoRefacciones = (float) $orden->refacciones->sum('costo_total');
             $totalCostoServicios = (float) $orden->detalles->sum('costo_total');
+            $totalAnticipos = round((float) $movimientosExistentes->sum('monto'), 2);
+            $saldo = round($totalCliente - $totalAnticipos, 2);
 
-            $this->crearMovimiento($orden, 'ingreso', 'reparacion', $totalCliente, null, 'Ingreso por orden '.$orden->folio);
+            if ($orden->cotizacion
+                && abs((float) $orden->cotizacion->anticipo - $totalAnticipos) >= 0.01) {
+                throw ValidationException::withMessages([
+                    'estado_nuevo' => 'El anticipo indicado en la cotización ($'.number_format((float) $orden->cotizacion->anticipo, 2).') no coincide con los ingresos de anticipo registrados ($'.number_format($totalAnticipos, 2).'). Reconcilia el cobro antes de entregar.',
+                ]);
+            }
+
+            if ($saldo < 0) {
+                throw ValidationException::withMessages([
+                    'estado_nuevo' => 'Los anticipos registrados ($'.number_format($totalAnticipos, 2).') superan el total de la orden ($'.number_format($totalCliente, 2).'). Corrige la inconsistencia antes de entregar.',
+                ]);
+            }
+
+            if ($saldo > 0) {
+                $this->crearMovimiento($orden, 'ingreso', 'reparacion', $saldo, null, 'Saldo de orden '.$orden->folio);
+            }
 
             if ($orden->partner_recepcion_id && $comisionLogistica > 0) {
                 $this->crearMovimiento(
@@ -117,6 +142,7 @@ class GenerarFinanzasOrdenServicio
     ): void {
         MovimientoFinanciero::create([
             'orden_servicio_id' => $orden->id,
+            'cotizacion_id' => $orden->cotizacion_id,
             'cliente_id' => $orden->cliente_id,
             'partner_id' => $partnerId,
             'tipo' => $tipo,

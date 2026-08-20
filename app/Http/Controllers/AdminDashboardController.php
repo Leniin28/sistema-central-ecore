@@ -47,7 +47,7 @@ class AdminDashboardController extends Controller
                 ->latest()
                 ->limit(5)
                 ->get(),
-            'ultimosMovimientos' => MovimientoFinanciero::with(['ordenServicio', 'cliente', 'partner'])
+            'ultimosMovimientos' => MovimientoFinanciero::with(['ordenServicio', 'cotizacion', 'cliente', 'partner'])
                 ->orderByDesc('fecha')
                 ->orderByDesc('id')
                 ->limit(5)

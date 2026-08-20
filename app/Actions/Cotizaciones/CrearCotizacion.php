@@ -15,6 +15,7 @@ class CrearCotizacion
     public function __construct(
         private CalcularTotalesCotizacion $calculadora,
         private VincularCotizacionAOrden $vincularOrden,
+        private RegistrarAnticipoCotizacion $registrarAnticipo,
     ) {}
 
     /**
@@ -76,6 +77,13 @@ class CrearCotizacion
 
                 $this->vincularOrden->vincular($cotizacion, (int) $data['orden_servicio_id'], $actor);
             }
+
+            $this->registrarAnticipo->registrarCambio(
+                $cotizacion,
+                0,
+                (float) $cotizacion->anticipo,
+                $actor,
+            );
 
             Log::info('Cotización creada', [
                 'cotizacion_id' => $cotizacion->id,

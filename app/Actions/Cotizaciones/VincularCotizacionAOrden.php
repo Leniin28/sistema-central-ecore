@@ -11,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class VincularCotizacionAOrden
 {
+    public function __construct(private RegistrarAnticipoCotizacion $registrarAnticipo) {}
+
     /** @var list<string> */
     private const ESTADOS_ACTIVOS = [
         'recibido',
@@ -61,7 +63,7 @@ class VincularCotizacionAOrden
             && ($cotizacion->equipo_id === null || (int) $orden->equipo_id === (int) $cotizacion->equipo_id)
             && in_array($orden->estado, self::ESTADOS_ACTIVOS, true)
             && ! $orden->finanzas_generadas
-            && ! $orden->movimientosFinancieros()->exists();
+            && ! $this->tieneMovimientosIncompatibles($orden, $cotizacion);
     }
 
     public function asegurarModificableParaCotizacion(OrdenServicio $orden, Cotizacion $cotizacion): void
@@ -104,6 +106,7 @@ class VincularCotizacionAOrden
 
             if ($ordenId === null) {
                 $ordenActual?->update(['cotizacion_id' => null]);
+                $this->registrarAnticipo->vincularAOrden($cotizacion, null);
 
                 return null;
             }
@@ -124,6 +127,8 @@ class VincularCotizacionAOrden
             if ($orden->cotizacion_id !== $cotizacion->id) {
                 $orden->update(['cotizacion_id' => $cotizacion->id]);
             }
+
+            $this->registrarAnticipo->vincularAOrden($cotizacion, $orden);
 
             return $orden->fresh();
         });
@@ -164,7 +169,7 @@ class VincularCotizacionAOrden
             ]);
         }
 
-        if ($orden->movimientosFinancieros()->exists()) {
+        if ($this->tieneMovimientosIncompatibles($orden, $cotizacion)) {
             throw ValidationException::withMessages([
                 'orden_servicio_id' => 'La orden seleccionada tiene movimientos financieros y no puede modificarse comercialmente.',
             ]);
@@ -175,5 +180,10 @@ class VincularCotizacionAOrden
                 'orden_servicio_id' => 'La orden seleccionada ya tiene otra cotización vinculada.',
             ]);
         }
+    }
+
+    private function tieneMovimientosIncompatibles(OrdenServicio $orden, Cotizacion $cotizacion): bool
+    {
+        return $orden->tieneMovimientosFinancierosIncompatibles($cotizacion->id);
     }
 }

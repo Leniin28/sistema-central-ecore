@@ -131,7 +131,7 @@ class OrdenServicioController extends Controller
         if ($ordenServicio->finanzas_generadas
             || $ordenServicio->estado === 'entregado'
             || ($ordenServicio->cotizacion?->estado === 'aceptada'
-                && ($ordenServicio->estado === 'cancelado' || $ordenServicio->movimientosFinancieros()->exists()))) {
+                && ($ordenServicio->estado === 'cancelado' || $ordenServicio->tieneMovimientosFinancierosIncompatibles()))) {
             return redirect()
                 ->route('admin.ordenes-servicio.show', $ordenServicio)
                 ->with('error', 'La orden está cerrada o tiene movimientos financieros y no puede editarse.');

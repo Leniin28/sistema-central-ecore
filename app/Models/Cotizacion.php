@@ -117,6 +117,12 @@ class Cotizacion extends Model
         return $this->hasOne(OrdenServicio::class);
     }
 
+    /** Get the financial movements registered from this quote. */
+    public function movimientosFinancieros(): HasMany
+    {
+        return $this->hasMany(MovimientoFinanciero::class);
+    }
+
     public function cotizacionCanonica(): BelongsTo
     {
         return $this->belongsTo(self::class, 'cotizacion_canonica_id');

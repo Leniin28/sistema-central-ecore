@@ -381,9 +381,10 @@
                 step="0.01"
                 value="{{ old('anticipo', $cotizacion->exists ? $cotizacion->anticipo : '0') }}"
                 class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm read-only:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:read-only:text-neutral-400"
-                @readonly($edicionAceptada)
+                @readonly(! auth()->user()->isAdmin())
             >
-            @if ($edicionAceptada)<p class="mt-1 text-xs text-neutral-500">Se conserva sin modificar su semántica actual.</p>@endif
+            @if ($edicionAceptada)<p class="mt-1 text-xs text-neutral-500">Puedes aumentar el anticipo mientras la orden siga abierta. Una disminución requiere reversión financiera explícita.</p>@endif
+            @if (! auth()->user()->isAdmin())<p class="mt-1 text-xs text-neutral-500">Sólo un administrador puede registrar o modificar anticipos.</p>@endif
             @error('anticipo')
                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
             @enderror

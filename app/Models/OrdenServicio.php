@@ -175,4 +175,19 @@ class OrdenServicio extends Model
     {
         return $this->hasMany(MovimientoFinanciero::class);
     }
+
+    /** Determine whether an open quoted order has movements other than its own advances. */
+    public function tieneMovimientosFinancierosIncompatibles(?int $cotizacionId = null): bool
+    {
+        $cotizacionId ??= $this->cotizacion_id;
+
+        return $this->movimientosFinancieros()
+            ->where(function ($query) use ($cotizacionId): void {
+                $query->where('tipo', '!=', 'ingreso')
+                    ->orWhere('categoria', '!=', 'anticipo')
+                    ->orWhereNull('cotizacion_id')
+                    ->orWhere('cotizacion_id', '!=', $cotizacionId);
+            })
+            ->exists();
+    }
 }

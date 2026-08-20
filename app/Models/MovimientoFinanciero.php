@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'orden_servicio_id',
+    'cotizacion_id',
     'cliente_id',
     'partner_id',
     'tipo',
@@ -40,6 +41,14 @@ class MovimientoFinanciero extends Model
     public function ordenServicio(): BelongsTo
     {
         return $this->belongsTo(OrdenServicio::class);
+    }
+
+    /**
+     * Get the quote that originated the financial movement.
+     */
+    public function cotizacion(): BelongsTo
+    {
+        return $this->belongsTo(Cotizacion::class);
     }
 
     /**

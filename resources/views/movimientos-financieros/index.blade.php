@@ -107,7 +107,7 @@
                                 <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300"><x-financial-label :value="$movimiento->tipo" /></td>
                                 <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300"><x-financial-label :value="$movimiento->categoria" /></td>
                                 <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-neutral-900 dark:text-neutral-100">${{ number_format($movimiento->monto, 2) }}</td>
-                                <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{{ $movimiento->orden_servicio_id ? $movimiento->ordenServicio?->folio : 'Manual' }}</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{{ $movimiento->ordenServicio?->folio ?? $movimiento->cotizacion?->folio ?? 'Manual' }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{{ $movimiento->cliente?->nombre ?? 'Sin cliente' }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{{ $movimiento->partner?->nombre ?? 'Sin partner' }}</td>
                                 <td class="px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{{ $movimiento->descripcion ?? 'Sin descripción' }}</td>

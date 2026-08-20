@@ -37,7 +37,7 @@ class ActualizarOrdenServicio
 
             $orden->load('cotizacion');
             if ($orden->cotizacion?->estado === 'aceptada'
-                && ($orden->estado === 'cancelado' || $orden->movimientosFinancieros()->exists())) {
+                && ($orden->estado === 'cancelado' || $orden->tieneMovimientosFinancierosIncompatibles())) {
                 throw ValidationException::withMessages([
                     'orden' => 'La orden vinculada está cerrada o tiene movimientos financieros y no puede modificarse.',
                 ]);

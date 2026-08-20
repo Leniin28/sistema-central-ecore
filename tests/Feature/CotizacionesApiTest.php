@@ -17,7 +17,7 @@ function payloadCotizacionApi(): array
             ['tipo' => 'refaccion', 'descripcion' => 'Memoria RAM 8GB', 'cantidad' => 2, 'precio_unitario' => 350],
         ],
         'descuento' => 100,
-        'anticipo' => 200,
+        'anticipo' => 0,
         'notas' => 'Cotización generada por OpenClaw',
     ];
 }
@@ -66,7 +66,7 @@ test('el endpoint interno crea una cotizacion con token valido', function () {
         ->assertJsonPath('estado', 'borrador')
         ->assertJsonPath('subtotal', 1100)
         ->assertJsonPath('total', 1000)
-        ->assertJsonPath('saldo', 800)
+        ->assertJsonPath('saldo', 1000)
         ->assertJsonStructure(['id', 'folio', 'cliente' => ['id', 'nombre'], 'pdf_url', 'show_url']);
 
     expect($response->json('folio'))->toStartWith('COT-')
@@ -194,7 +194,7 @@ test('el endpoint interno guarda la recepcion a domicilio usando la direccion de
         ->assertJsonPath('direccion_recepcion', 'Av. Convención 500, Aguascalientes');
 });
 
-test('el endpoint interno acepta el payload completo de OpenClaw (cliente rapido, domicilio, direccion, anticipo y external_id)', function () {
+test('el endpoint interno no puede registrar anticipos sin un administrador humano', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
 
     // Equivalente al payload probado desde PowerShell: cliente creado al vuelo,
@@ -213,16 +213,10 @@ test('el endpoint interno acepta el payload completo de OpenClaw (cliente rapido
     $response = $this->withToken('token-secreto-pruebas')
         ->postJson('/api/internal/quotes', $payload);
 
-    $response->assertCreated()
-        ->assertJsonPath('estado', 'borrador')
-        ->assertJsonPath('tipo_recepcion', 'recogido_a_domicilio')
-        ->assertJsonPath('direccion_recepcion', 'Calle prueba #123')
-        ->assertJsonPath('external_id', 'telegram-test-002')
-        ->assertJsonPath('total', 250)
-        ->assertJsonPath('anticipo', 100)
-        ->assertJsonPath('saldo', 150);
+    $response->assertUnprocessable()->assertJsonValidationErrors('anticipo');
 
-    expect(Cliente::where('nombre', 'Cliente Telegram')->exists())->toBeTrue();
+    expect(Cliente::where('nombre', 'Cliente Telegram')->exists())->toBeFalse()
+        ->and(Cotizacion::where('external_id', 'telegram-test-002')->exists())->toBeFalse();
 });
 
 test('el endpoint interno rechaza recepcion a domicilio sin direccion', function () {

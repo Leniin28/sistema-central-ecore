@@ -23,6 +23,7 @@ class ConvertirCotizacionEnOrden
         private ResolverPartnerLogistico $resolverPartner,
         private VincularCotizacionAOrden $vincularOrden,
         private SincronizarLineasCotizacionConOrden $sincronizarLineas,
+        private RegistrarAnticipoCotizacion $registrarAnticipo,
     ) {}
 
     /**
@@ -38,6 +39,7 @@ class ConvertirCotizacionEnOrden
             $ordenVinculada = $cotizacion->ordenServicio()->lockForUpdate()->first();
             if ($ordenVinculada) {
                 $this->vincularOrden->asegurarElegible($ordenVinculada, $cotizacion, exigirEquipo: false);
+                $this->registrarAnticipo->vincularAOrden($cotizacion, $ordenVinculada);
                 $this->sincronizarLineas->sincronizar($ordenVinculada, $cotizacion);
 
                 return [
@@ -96,6 +98,7 @@ class ConvertirCotizacionEnOrden
             );
 
             $this->sincronizarLineas->sincronizar($orden, $cotizacion);
+            $this->registrarAnticipo->vincularAOrden($cotizacion, $orden);
 
             if ($cotizacion->estado !== 'aceptada') {
                 if ($cotizacion->esEditable()) {

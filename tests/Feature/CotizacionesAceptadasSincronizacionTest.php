@@ -90,7 +90,7 @@ function payloadSincronizacionAceptada(array $contexto, array $items): array
         'fecha' => today()->format('Y-m-d'),
         'tipo_recepcion' => 'en_negocio',
         'descuento' => 999,
-        'anticipo' => 999,
+        'anticipo' => (float) $contexto['cotizacion']->anticipo,
         'notas' => 'Cotización aceptada actualizada',
         'items' => $items,
     ];

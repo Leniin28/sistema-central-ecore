@@ -312,8 +312,8 @@ test('el cambio de estado es idempotente con external_id y no duplica historial 
         ->and(MovimientoFinanciero::where('orden_servicio_id', $orden->id)->count())
         ->toBe(MovimientoFinanciero::where('orden_servicio_id', $orden->id)->count()); // estable entre llamadas
 
-    // Conteo absoluto: solo el ingreso de la primera entrega (total 0, sin refacciones ni partners).
-    expect(MovimientoFinanciero::where('orden_servicio_id', $orden->id)->count())->toBe(1);
+    // Una entrega con total cero no inventa un ingreso de venta por monto cero.
+    expect(MovimientoFinanciero::where('orden_servicio_id', $orden->id)->count())->toBe(0);
 });
 
 test('una orden ya entregada rechaza otro cambio de estado con 409', function () {
