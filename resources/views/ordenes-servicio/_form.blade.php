@@ -5,11 +5,14 @@
 @enderror
 
 @php
+    $detallesCotizacion = $orden->exists ? $orden->detalles->whereNotNull('cotizacion_item_id')->values() : collect();
+    $refaccionesCotizacion = $orden->exists ? $orden->refacciones->whereNotNull('cotizacion_item_id')->values() : collect();
+    $trabajoVinculadoBloqueado = $orden->exists && $orden->cotizacion?->estado === 'aceptada';
     $servicioRows = old('servicios');
 
     if ($servicioRows === null) {
         $servicioRows = $orden->exists
-            ? $orden->detalles->map(fn ($detalle) => [
+            ? $orden->detalles->whereNull('cotizacion_item_id')->map(fn ($detalle) => [
                 'servicio_id' => $detalle->servicio_id,
                 'descripcion' => $detalle->descripcion,
                 'cantidad' => $detalle->cantidad,
@@ -31,7 +34,7 @@
 
     if ($refaccionRows === null) {
         $refaccionRows = $orden->exists
-            ? $orden->refacciones->map(fn ($refaccion) => [
+            ? $orden->refacciones->whereNull('cotizacion_item_id')->map(fn ($refaccion) => [
                 'descripcion' => $refaccion->descripcion,
                 'cantidad' => $refaccion->cantidad,
                 'costo_unitario' => $refaccion->costo_unitario,
@@ -56,6 +59,7 @@
             name="cliente_id"
             class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
             required
+            @disabled($trabajoVinculadoBloqueado)
         >
             <option value="">Selecciona un cliente</option>
             @foreach ($clientes as $cliente)
@@ -64,6 +68,7 @@
                 </option>
             @endforeach
         </select>
+        @if ($trabajoVinculadoBloqueado)<input type="hidden" name="cliente_id" value="{{ $orden->cliente_id }}">@endif
         @error('cliente_id')
             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
         @enderror
@@ -75,6 +80,7 @@
             id="equipo_id"
             name="equipo_id"
             class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+            @disabled($trabajoVinculadoBloqueado)
         >
             <option value="">Sin equipo asignado</option>
             @foreach ($equipos as $equipo)
@@ -83,6 +89,7 @@
                 </option>
             @endforeach
         </select>
+        @if ($trabajoVinculadoBloqueado)<input type="hidden" name="equipo_id" value="{{ $orden->equipo_id }}">@endif
         @error('equipo_id')
             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
         @enderror
@@ -256,6 +263,34 @@
     </section>
 </div>
 
+@if ($detallesCotizacion->isNotEmpty() || $refaccionesCotizacion->isNotEmpty())
+    <section class="mt-5 rounded-lg border border-blue-200 bg-blue-50/50 p-5 dark:border-blue-900 dark:bg-blue-950/20">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Conceptos administrados por cotización</h2>
+                <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Se muestran sólo como referencia. Edítalos desde la cotización para conservar su trazabilidad.</p>
+            </div>
+            @if ($orden->cotizacion)
+                <a href="{{ route('admin.cotizaciones.show', $orden->cotizacion) }}" class="text-sm font-semibold text-blue-700 underline dark:text-blue-300">Ver cotización {{ $orden->cotizacion->folio }}</a>
+            @endif
+        </div>
+
+        <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead><tr class="text-left text-neutral-600 dark:text-neutral-400"><th class="py-2 pr-4">Tipo</th><th class="py-2 pr-4">Descripción</th><th class="py-2 pr-4 text-right">Cantidad</th><th class="py-2 text-right">Precio</th></tr></thead>
+                <tbody class="divide-y divide-blue-100 dark:divide-blue-900">
+                    @foreach ($detallesCotizacion as $linea)
+                        <tr><td class="py-2 pr-4">Servicio</td><td class="py-2 pr-4">{{ $linea->descripcion }}</td><td class="py-2 pr-4 text-right">{{ $linea->cantidad }}</td><td class="py-2 text-right">${{ number_format($linea->precio_unitario, 2) }}</td></tr>
+                    @endforeach
+                    @foreach ($refaccionesCotizacion as $linea)
+                        <tr><td class="py-2 pr-4">Refacción</td><td class="py-2 pr-4">{{ $linea->descripcion }}</td><td class="py-2 pr-4 text-right">{{ $linea->cantidad }}</td><td class="py-2 text-right">${{ number_format($linea->precio_unitario_cliente, 2) }}</td></tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </section>
+@endif
+
 <section class="mt-6 border-y border-neutral-200 py-5 dark:border-neutral-700" aria-label="Resumen estimado">
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div><p class="text-xs font-medium uppercase text-neutral-500">Servicios</p><p id="order-total-services" class="mt-1 text-lg font-semibold">$0.00</p></div>
@@ -282,6 +317,9 @@
         const form = orderForm;
         if (!form) return;
         const money = value => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value || 0);
+        const tracedServices = {{ Illuminate\Support\Js::from((float) $detallesCotizacion->sum('subtotal')) }};
+        const tracedParts = {{ Illuminate\Support\Js::from((float) $refaccionesCotizacion->sum('precio_total_cliente')) }};
+        const tracedPartCosts = {{ Illuminate\Support\Js::from((float) $refaccionesCotizacion->sum('costo_total')) }};
         const rowTypes = {
             service: {
                 list: form.querySelector('[data-service-rows]'),
@@ -322,7 +360,7 @@
         };
 
         const calculate = () => {
-            let services = 0, parts = 0, costs = 0;
+            let services = tracedServices, parts = tracedParts, costs = tracedPartCosts;
             rowTypes.service.list.querySelectorAll(rowTypes.service.rowSelector).forEach(row => {
                 if (!row.querySelector('[name$="[descripcion]"]')?.value.trim()) return;
                 const quantity = Number(row.querySelector('[name$="[cantidad]"]')?.value) || 0;

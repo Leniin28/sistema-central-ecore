@@ -1,6 +1,7 @@
 @csrf
 
 @php
+    $edicionAceptada = $cotizacion->exists && $cotizacion->estado === 'aceptada';
     $itemRows = old('items');
 
     if ($itemRows === null) {
@@ -25,36 +26,54 @@
 
 <div class="grid gap-5">
     <div class="grid gap-5 sm:grid-cols-2">
-        <div>
-            <x-searchable-select
-                id="cliente_id"
-                name="cliente_id"
-                label="Cliente"
-                :url="route($routePrefix.'.clientes.buscar')"
-                :selected-id="$clienteSeleccionado?->id"
-                :selected-label="$clienteSeleccionado ? $clienteSeleccionado->nombre.' · '.$clienteSeleccionado->telefono : null"
-                required
-            />
-            <a href="{{ route($routePrefix.'.clientes.create') }}" class="mt-2 inline-block text-sm text-neutral-600 underline hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white">Registrar nuevo cliente</a>
-            @error('cliente_id')
-                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-            @enderror
-        </div>
+        @if ($edicionAceptada)
+            <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900/40">
+                <p class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Cliente</p>
+                <p class="mt-1 text-neutral-900 dark:text-neutral-100">{{ $clienteSeleccionado?->nombre }}</p>
+                <input type="hidden" name="cliente_id" value="{{ $cotizacion->cliente_id }}">
+                @error('cliente_id')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
 
-        <div>
-            <x-searchable-select
-                id="equipo_id"
-                name="equipo_id"
-                label="Equipo (opcional)"
-                :url="str_replace('__CLIENTE__', '{cliente}', route($routePrefix.'.clientes.equipos.buscar', '__CLIENTE__'))"
-                :selected-id="$equipoSeleccionado?->id"
-                :selected-label="$equipoSeleccionado ? $equipoSeleccionado->tipo_equipo.' · '.$equipoSeleccionado->marca.' '.$equipoSeleccionado->modelo : null"
-                depends-on="cliente_id"
-            />
-            @error('equipo_id')
-                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-            @enderror
-        </div>
+            <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900/40">
+                <p class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Equipo</p>
+                <p class="mt-1 text-neutral-900 dark:text-neutral-100">
+                    {{ $equipoSeleccionado ? $equipoSeleccionado->tipo_equipo.' · '.$equipoSeleccionado->marca.' '.$equipoSeleccionado->modelo : 'Sin equipo' }}
+                </p>
+                <input type="hidden" name="equipo_id" value="{{ $cotizacion->equipo_id }}">
+                @error('equipo_id')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+        @else
+            <div>
+                <x-searchable-select
+                    id="cliente_id"
+                    name="cliente_id"
+                    label="Cliente"
+                    :url="route($routePrefix.'.clientes.buscar')"
+                    :selected-id="$clienteSeleccionado?->id"
+                    :selected-label="$clienteSeleccionado ? $clienteSeleccionado->nombre.' · '.$clienteSeleccionado->telefono : null"
+                    required
+                />
+                <a href="{{ route($routePrefix.'.clientes.create') }}" class="mt-2 inline-block text-sm text-neutral-600 underline hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white">Registrar nuevo cliente</a>
+                @error('cliente_id')
+                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <div>
+                <x-searchable-select
+                    id="equipo_id"
+                    name="equipo_id"
+                    label="Equipo (opcional)"
+                    :url="str_replace('__CLIENTE__', '{cliente}', route($routePrefix.'.clientes.equipos.buscar', '__CLIENTE__'))"
+                    :selected-id="$equipoSeleccionado?->id"
+                    :selected-label="$equipoSeleccionado ? $equipoSeleccionado->tipo_equipo.' · '.$equipoSeleccionado->marca.' '.$equipoSeleccionado->modelo : null"
+                    depends-on="cliente_id"
+                />
+                @error('equipo_id')
+                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+        @endif
 
         <div>
             <label for="fecha" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Fecha</label>
@@ -86,7 +105,17 @@
         </div>
     </div>
 
-    @if (auth()->user()->isAdmin())
+    @if ($edicionAceptada)
+        <section class="rounded-lg border border-blue-200 bg-blue-50/50 p-5 dark:border-blue-900 dark:bg-blue-950/20">
+            <p class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Orden vinculada</p>
+            <a href="{{ route('admin.ordenes-servicio.show', $ordenSeleccionada) }}" class="mt-2 inline-block font-medium text-blue-700 underline dark:text-blue-300">
+                {{ $ordenSeleccionada->folio }} — {{ $ordenSeleccionada->estadoLabel() }}
+            </a>
+            <p class="mt-2 text-sm text-neutral-600 dark:text-neutral-400">Cliente, equipo y orden permanecen fijos después de aceptar.</p>
+            <input type="hidden" name="orden_servicio_id" value="{{ $ordenSeleccionada->id }}">
+            @error('orden_servicio_id')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+        </section>
+    @elseif (auth()->user()->isAdmin())
         <section
             class="rounded-lg border border-blue-200 bg-blue-50/50 p-5 dark:border-blue-900 dark:bg-blue-950/20"
             data-orden-activa-selector
@@ -229,7 +258,7 @@
 
         <div class="mt-5 grid gap-4">
             @foreach ($itemRows as $index => $row)
-                <div class="grid gap-3 rounded-md border border-neutral-200 p-4 dark:border-neutral-700 lg:grid-cols-12">
+                <div data-quote-item-row class="grid gap-3 rounded-md border border-neutral-200 p-4 dark:border-neutral-700 lg:grid-cols-12">
                     @if (filled($row['id'] ?? null))
                         <input type="hidden" name="items[{{ $index }}][id]" value="{{ $row['id'] }}">
                     @endif
@@ -312,6 +341,12 @@
                             @enderror
                         </div>
                     @endif
+
+                    <div class="flex justify-end lg:col-span-12">
+                        <button type="button" data-remove-quote-item class="text-sm font-medium text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-200">
+                            Quitar concepto
+                        </button>
+                    </div>
                 </div>
             @endforeach
         </div>
@@ -327,8 +362,10 @@
                 min="0"
                 step="0.01"
                 value="{{ old('descuento', $cotizacion->exists ? $cotizacion->descuento : '0') }}"
-                class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm read-only:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:read-only:text-neutral-400"
+                @readonly($edicionAceptada)
             >
+            @if ($edicionAceptada)<p class="mt-1 text-xs text-neutral-500">Se conserva porque la orden no modela descuentos por separado.</p>@endif
             @error('descuento')
                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
             @enderror
@@ -343,8 +380,10 @@
                 min="0"
                 step="0.01"
                 value="{{ old('anticipo', $cotizacion->exists ? $cotizacion->anticipo : '0') }}"
-                class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm read-only:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:read-only:text-neutral-400"
+                @readonly($edicionAceptada)
             >
+            @if ($edicionAceptada)<p class="mt-1 text-xs text-neutral-500">Se conserva sin modificar su semántica actual.</p>@endif
             @error('anticipo')
                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
             @enderror
@@ -412,6 +451,14 @@
         };
         form.addEventListener('input', calculate);
         form.addEventListener('change', calculate);
+        form.addEventListener('click', event => {
+            if (!(event.target instanceof Element)) return;
+            const remove = event.target.closest('[data-remove-quote-item]');
+            if (!remove) return;
+            const row = remove.closest('[data-quote-item-row]');
+            row?.querySelectorAll('input:not([type="hidden"])').forEach(input => { input.value = ''; });
+            calculate();
+        });
         calculate();
 
         const receptionType = form.querySelector('#tipo_recepcion');

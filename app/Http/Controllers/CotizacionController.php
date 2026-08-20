@@ -103,25 +103,40 @@ class CotizacionController extends Controller
     /**
      * Display the specified quote.
      */
-    public function show(Cotizacion $cotizacion): View
+    public function show(Cotizacion $cotizacion, VincularCotizacionAOrden $vincularOrden): View
     {
         $this->autorizarAcceso($cotizacion);
-        $cotizacion->load(['items', 'cliente', 'equipo', 'partner']);
+        $cotizacion->load(['items', 'cliente', 'equipo', 'partner', 'ordenServicio']);
+        $puedeEditar = $cotizacion->esEditable()
+            || ($cotizacion->estado === 'aceptada'
+                && auth()->user()->isAdmin()
+                && $cotizacion->ordenServicio
+                && $vincularOrden->esModificableParaCotizacion($cotizacion->ordenServicio, $cotizacion));
 
         return view('cotizaciones.show', [
             'cotizacion' => $cotizacion,
             'routePrefix' => $this->routePrefix(),
+            'puedeEditar' => $puedeEditar,
         ]);
     }
 
     /**
      * Show the form for editing the specified quote.
      */
-    public function edit(Cotizacion $cotizacion): View
+    public function edit(Cotizacion $cotizacion, VincularCotizacionAOrden $vincularOrden): View
     {
         $this->autorizarAcceso($cotizacion);
-        abort_unless($cotizacion->esEditable(), 403);
         $cotizacion->load(['items', 'ordenServicio']);
+
+        if ($cotizacion->estado === 'aceptada') {
+            abort_unless(auth()->user()->isAdmin() && $cotizacion->ordenServicio, 403);
+            abort_unless(
+                $vincularOrden->esModificableParaCotizacion($cotizacion->ordenServicio, $cotizacion),
+                403,
+            );
+        } else {
+            abort_unless($cotizacion->esEditable(), 403);
+        }
 
         return view('cotizaciones.edit', [
             'cotizacion' => $cotizacion,

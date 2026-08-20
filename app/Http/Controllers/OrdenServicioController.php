@@ -126,13 +126,16 @@ class OrdenServicioController extends Controller
     {
         abort_unless(auth()->user()->isAdmin(), 403);
 
-        if ($ordenServicio->finanzas_generadas || $ordenServicio->estado === 'entregado') {
+        $ordenServicio->load(['cotizacion', 'detalles', 'refacciones' => fn ($query) => $query->orderBy('id')]);
+
+        if ($ordenServicio->finanzas_generadas
+            || $ordenServicio->estado === 'entregado'
+            || ($ordenServicio->cotizacion?->estado === 'aceptada'
+                && ($ordenServicio->estado === 'cancelado' || $ordenServicio->movimientosFinancieros()->exists()))) {
             return redirect()
                 ->route('admin.ordenes-servicio.show', $ordenServicio)
-                ->with('error', 'La orden entregada está cerrada y no puede editarse.');
+                ->with('error', 'La orden está cerrada o tiene movimientos financieros y no puede editarse.');
         }
-
-        $ordenServicio->load(['detalles', 'refacciones' => fn ($query) => $query->orderBy('id')]);
 
         return view('ordenes-servicio.edit', [
             'orden' => $ordenServicio,
@@ -149,7 +152,7 @@ class OrdenServicioController extends Controller
         $orden = $actualizarOrden->ejecutar(
             $ordenServicio,
             $this->validatedData($request),
-            $this->validatedDetalles($request),
+            $this->validatedDetalles($request, $ordenServicio),
             $this->validatedRefacciones($request),
             $request->user(),
         );
@@ -223,13 +226,17 @@ class OrdenServicioController extends Controller
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function validatedDetalles(Request $request): array
+    private function validatedDetalles(Request $request, ?OrdenServicio $ordenServicio = null): array
     {
         $servicios = collect($request->input('servicios', []))
             ->filter(fn ($row): bool => is_array($row) && (filled($row['servicio_id'] ?? null) || filled($row['descripcion'] ?? null)))
             ->values()->all();
 
         if ($servicios === []) {
+            if ($ordenServicio?->cotizacion_id !== null) {
+                return [];
+            }
+
             throw ValidationException::withMessages(['servicios' => 'Agrega al menos un servicio a la orden.']);
         }
 

@@ -14,6 +14,7 @@ class ActualizarCotizacion
     public function __construct(
         private CalcularTotalesCotizacion $calculadora,
         private VincularCotizacionAOrden $vincularOrden,
+        private SincronizarLineasCotizacionConOrden $sincronizarLineas,
     ) {}
 
     /**
@@ -24,6 +25,10 @@ class ActualizarCotizacion
     {
         return DB::transaction(function () use ($cotizacion, $data, $items, $actor): Cotizacion {
             $cotizacion = Cotizacion::query()->lockForUpdate()->findOrFail($cotizacion->id);
+
+            if ($cotizacion->estado === 'aceptada') {
+                return $this->actualizarAceptada($cotizacion, $data, $items, $actor);
+            }
 
             if (! $cotizacion->esEditable()) {
                 throw ValidationException::withMessages([
@@ -82,6 +87,123 @@ class ActualizarCotizacion
 
             return $cotizacion->fresh(['items', 'cliente', 'equipo']);
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function actualizarAceptada(Cotizacion $cotizacion, array $data, array $items, User $actor): Cotizacion
+    {
+        abort_unless($actor->isAdmin(), 403);
+
+        $orden = $cotizacion->ordenServicio()->lockForUpdate()->first();
+        if (! $orden) {
+            throw ValidationException::withMessages([
+                'orden_servicio_id' => 'La cotización aceptada no tiene una orden vinculada y no puede editarse.',
+            ]);
+        }
+
+        $this->vincularOrden->asegurarModificableParaCotizacion($orden, $cotizacion);
+        $this->validarCamposCongelados($data, $cotizacion, $orden->id);
+
+        $itemsExistentes = $cotizacion->items()
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+        $idsRecibidos = collect($items)
+            ->pluck('id')
+            ->filter(fn ($id): bool => filled($id))
+            ->map(fn ($id): int => (int) $id);
+
+        if ($idsRecibidos->duplicates()->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'items' => 'Un concepto existente no puede enviarse más de una vez.',
+            ]);
+        }
+
+        foreach ($idsRecibidos as $itemId) {
+            if (! $itemsExistentes->has($itemId)) {
+                throw ValidationException::withMessages([
+                    'items' => 'Uno de los conceptos enviados no pertenece a esta cotización.',
+                ]);
+            }
+        }
+
+        $itemsCalculados = array_map(fn (array $item): array => [
+            'id' => filled($item['id'] ?? null) ? (int) $item['id'] : null,
+            ...$this->calculadora->item($item),
+        ], $items);
+        $resumen = $this->calculadora->resumen(
+            $itemsCalculados,
+            (float) $cotizacion->descuento,
+            (float) $cotizacion->anticipo,
+        );
+        $recepcion = $this->resolverRecepcion($data, $cotizacion);
+
+        $cotizacion->update([
+            'fecha' => $data['fecha'],
+            'vigencia' => $data['vigencia'] ?? null,
+            ...$recepcion,
+            ...$resumen,
+            'notas' => $data['notas'] ?? null,
+        ]);
+
+        $idsConservados = collect();
+        foreach ($itemsCalculados as $item) {
+            $itemId = $item['id'];
+            unset($item['id']);
+
+            if ($itemId !== null) {
+                $itemsExistentes->get($itemId)->update($item);
+                $idsConservados->push($itemId);
+
+                continue;
+            }
+
+            $nuevo = $cotizacion->items()->create($item);
+            $idsConservados->push($nuevo->id);
+        }
+
+        $itemsEliminados = $itemsExistentes->except($idsConservados->all());
+        $this->sincronizarLineas->eliminarLineas($orden, $itemsEliminados);
+        foreach ($itemsEliminados as $itemEliminado) {
+            $itemEliminado->delete();
+        }
+
+        $cotizacion->unsetRelation('items');
+        $this->sincronizarLineas->sincronizar($orden, $cotizacion);
+
+        Log::info('Cotización aceptada sincronizada con su orden', [
+            'cotizacion_id' => $cotizacion->id,
+            'orden_servicio_id' => $orden->id,
+            'user_id' => $actor->id,
+        ]);
+
+        return $cotizacion->fresh(['items', 'cliente', 'equipo', 'ordenServicio']);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validarCamposCongelados(array $data, Cotizacion $cotizacion, int $ordenId): void
+    {
+        if ((int) $data['cliente_id'] !== (int) $cotizacion->cliente_id) {
+            throw ValidationException::withMessages([
+                'cliente_id' => 'El cliente de una cotización aceptada no puede cambiarse.',
+            ]);
+        }
+
+        if ((int) ($data['equipo_id'] ?? 0) !== (int) ($cotizacion->equipo_id ?? 0)) {
+            throw ValidationException::withMessages([
+                'equipo_id' => 'El equipo de una cotización aceptada no puede cambiarse.',
+            ]);
+        }
+
+        if ((int) ($data['orden_servicio_id'] ?? 0) !== $ordenId) {
+            throw ValidationException::withMessages([
+                'orden_servicio_id' => 'La orden vinculada a una cotización aceptada no puede cambiarse.',
+            ]);
+        }
     }
 
     /**

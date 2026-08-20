@@ -4,16 +4,11 @@ namespace App\Actions\Cotizaciones;
 
 use App\Actions\OpenClaw\ObtenerUsuarioSistema;
 use App\Actions\OpenClaw\ResolverPartnerLogistico;
-use App\Actions\Ordenes\CalcularTotalesOrdenServicio;
 use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cotizacion;
 use App\Models\Equipo;
 use App\Models\OrdenServicio;
-use App\Models\OrdenServicioDetalle;
-use App\Models\OrdenServicioRefaccion;
-use App\Models\Servicio;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Converts an accepted quote into an order. Quote conversion deliberately does
@@ -24,10 +19,10 @@ class ConvertirCotizacionEnOrden
 {
     public function __construct(
         private CrearOrdenServicio $crearOrden,
-        private CalcularTotalesOrdenServicio $calculadora,
         private ObtenerUsuarioSistema $usuarioSistema,
         private ResolverPartnerLogistico $resolverPartner,
         private VincularCotizacionAOrden $vincularOrden,
+        private SincronizarLineasCotizacionConOrden $sincronizarLineas,
     ) {}
 
     /**
@@ -43,8 +38,7 @@ class ConvertirCotizacionEnOrden
             $ordenVinculada = $cotizacion->ordenServicio()->lockForUpdate()->first();
             if ($ordenVinculada) {
                 $this->vincularOrden->asegurarElegible($ordenVinculada, $cotizacion, exigirEquipo: false);
-                $this->reconciliarLineas($ordenVinculada, $this->mapearItems($cotizacion));
-                $this->recalcularTotalesOrden($ordenVinculada);
+                $this->sincronizarLineas->sincronizar($ordenVinculada, $cotizacion);
 
                 return [
                     'orden' => $ordenVinculada->fresh(['cliente', 'equipo', 'partnerRecepcion']),
@@ -84,9 +78,6 @@ class ConvertirCotizacionEnOrden
                 $bloques[] = "Notas:\n".trim((string) $recepcion['notas']);
             }
 
-            $lineas = $this->mapearItems($cotizacion);
-            $this->validarTrazabilidadLineas($lineas);
-
             $orden = $this->crearOrden->ejecutar(
                 [
                     'cotizacion_id' => $cotizacion->id,
@@ -104,8 +95,7 @@ class ConvertirCotizacionEnOrden
                 $data['actor'] ?? $this->usuarioSistema->ejecutar(),
             );
 
-            $this->reconciliarLineas($orden, $lineas);
-            $this->recalcularTotalesOrden($orden);
+            $this->sincronizarLineas->sincronizar($orden, $cotizacion);
 
             if ($cotizacion->estado !== 'aceptada') {
                 if ($cotizacion->esEditable()) {
@@ -133,138 +123,6 @@ class ConvertirCotizacionEnOrden
                 'warnings' => $warnings,
             ];
         });
-    }
-
-    /** @return array{detalles: array<int, array<string, mixed>>, refacciones: array<int, array<string, mixed>>} */
-    private function mapearItems(Cotizacion $cotizacion): array
-    {
-        $detalles = [];
-        $refacciones = [];
-
-        foreach ($cotizacion->items as $item) {
-            if ($item->tipo === 'servicio') {
-                $detalles[] = [
-                    'cotizacion_item_id' => $item->id,
-                    'servicio_id' => $this->resolverServicioExacto($item),
-                    'descripcion' => $item->descripcion,
-                    'cantidad' => (int) $item->cantidad,
-                    'precio_unitario' => (float) $item->precio_unitario,
-                    'costo_unitario' => $item->costo_unitario,
-                ];
-
-                continue;
-            }
-
-            $refacciones[] = [
-                'cotizacion_item_id' => $item->id,
-                'descripcion' => $item->descripcion,
-                'cantidad' => (int) $item->cantidad,
-                'precio_unitario_cliente' => (float) $item->precio_unitario,
-                'costo_unitario' => $item->costo_unitario,
-                'notas' => 'Tomado de la cotización '.$cotizacion->folio.' (tipo '.$item->tipo.').',
-            ];
-        }
-
-        return ['detalles' => $detalles, 'refacciones' => $refacciones];
-    }
-
-    /**
-     * A DB unique index protects each destination table. The cross-table
-     * invariant needs this explicit in-memory guard until both types share a
-     * transfer ledger.
-     *
-     * @param  array{detalles: array<int, array<string, mixed>>, refacciones: array<int, array<string, mixed>>}  $lineas
-     */
-    private function validarTrazabilidadLineas(array $lineas): void
-    {
-        $detalles = collect($lineas['detalles'])->pluck('cotizacion_item_id');
-        $refacciones = collect($lineas['refacciones'])->pluck('cotizacion_item_id');
-
-        if ($detalles->intersect($refacciones)->isNotEmpty()) {
-            throw ValidationException::withMessages([
-                'cotizacion' => 'Una línea de cotización no puede transferirse como servicio y refacción a la vez.',
-            ]);
-        }
-
-    }
-
-    /**
-     * Reconciles each source item independently. A correct existing transfer
-     * is retained, missing lines are copied, and the opposite line type is
-     * always rejected. This is idempotent for both panel replays and Case A.
-     *
-     * @param  array{detalles: array<int, array<string, mixed>>, refacciones: array<int, array<string, mixed>>}  $lineas
-     */
-    private function reconciliarLineas(OrdenServicio $orden, array $lineas): void
-    {
-        foreach ($lineas['detalles'] as $detalle) {
-            $itemId = $detalle['cotizacion_item_id'];
-            if (OrdenServicioRefaccion::query()->where('cotizacion_item_id', $itemId)->exists()) {
-                throw ValidationException::withMessages([
-                    'cotizacion' => 'Una línea de cotización ya está transferida como refacción.',
-                ]);
-            }
-
-            $orden->detalles()->firstOrCreate(
-                ['cotizacion_item_id' => $itemId],
-                $this->calculadora->detalle($detalle),
-            );
-        }
-
-        foreach ($lineas['refacciones'] as $refaccion) {
-            $itemId = $refaccion['cotizacion_item_id'];
-            if (OrdenServicioDetalle::query()->where('cotizacion_item_id', $itemId)->exists()) {
-                throw ValidationException::withMessages([
-                    'cotizacion' => 'Una línea de cotización ya está transferida como servicio.',
-                ]);
-            }
-
-            $orden->refacciones()->firstOrCreate(
-                ['cotizacion_item_id' => $itemId],
-                $this->calculadora->refaccion($refaccion),
-            );
-        }
-    }
-
-    /** Recalculate stored totals from persisted lines without overwriting them. */
-    private function recalcularTotalesOrden(OrdenServicio $orden): void
-    {
-        $orden->load(['detalles', 'refacciones']);
-        $totalServicios = (float) $orden->detalles->sum('subtotal');
-        $totalRefacciones = (float) $orden->refacciones->sum('precio_total_cliente');
-        $costoServicios = (float) $orden->detalles->sum('costo_total');
-        $costoRefacciones = (float) $orden->refacciones->sum('costo_total');
-        $totalCliente = $totalServicios + $totalRefacciones;
-        $costosIncompletos = $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)
-            || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null)
-            || ($orden->partner_tecnico_id !== null && $orden->costo_tecnico === null);
-
-        $orden->update([
-            'total_cliente' => $totalCliente,
-            'utilidad_estimada' => $totalCliente - $costoServicios - $costoRefacciones - (float) $orden->costo_tecnico - (float) $orden->comision_logistica,
-            'costos_incompletos' => $costosIncompletos,
-        ]);
-    }
-
-    private function resolverServicioExacto(object $item): ?int
-    {
-        $descripcion = $this->normalizarDescripcion((string) $item->descripcion);
-        if ($descripcion === '') {
-            return null;
-        }
-
-        $coincidencias = Servicio::query()
-            ->where('activo', true)
-            ->get(['id', 'nombre'])
-            ->filter(fn (Servicio $servicio): bool => $this->normalizarDescripcion($servicio->nombre) === $descripcion)
-            ->values();
-
-        return $coincidencias->count() === 1 ? $coincidencias->first()->id : null;
-    }
-
-    private function normalizarDescripcion(string $descripcion): string
-    {
-        return (string) str($descripcion)->ascii()->lower()->squish();
     }
 
     /**

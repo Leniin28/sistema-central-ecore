@@ -54,6 +54,27 @@ class VincularCotizacionAOrden
             && ! $orden->movimientosFinancieros()->exists();
     }
 
+    public function esModificableParaCotizacion(OrdenServicio $orden, Cotizacion $cotizacion): bool
+    {
+        return (int) $orden->cotizacion_id === (int) $cotizacion->id
+            && (int) $orden->cliente_id === (int) $cotizacion->cliente_id
+            && ($cotizacion->equipo_id === null || (int) $orden->equipo_id === (int) $cotizacion->equipo_id)
+            && in_array($orden->estado, self::ESTADOS_ACTIVOS, true)
+            && ! $orden->finanzas_generadas
+            && ! $orden->movimientosFinancieros()->exists();
+    }
+
+    public function asegurarModificableParaCotizacion(OrdenServicio $orden, Cotizacion $cotizacion): void
+    {
+        $this->asegurarElegible($orden, $cotizacion, exigirEquipo: false);
+
+        if ((int) $orden->cotizacion_id !== (int) $cotizacion->id) {
+            throw ValidationException::withMessages([
+                'orden_servicio_id' => 'La cotización aceptada no está vinculada a esta orden.',
+            ]);
+        }
+    }
+
     public function vincular(Cotizacion $cotizacion, ?int $ordenId, User $actor): ?OrdenServicio
     {
         if (! $actor->isAdmin()) {

@@ -12,7 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class ActualizarOrdenServicio
 {
-    public function __construct(private CalcularTotalesOrdenServicio $calculadora) {}
+    public function __construct(
+        private CalcularTotalesOrdenServicio $calculadora,
+        private RecalcularTotalesOrdenServicio $recalcularTotales,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -32,6 +35,22 @@ class ActualizarOrdenServicio
                 ]);
             }
 
+            $orden->load('cotizacion');
+            if ($orden->cotizacion?->estado === 'aceptada'
+                && ($orden->estado === 'cancelado' || $orden->movimientosFinancieros()->exists())) {
+                throw ValidationException::withMessages([
+                    'orden' => 'La orden vinculada está cerrada o tiene movimientos financieros y no puede modificarse.',
+                ]);
+            }
+
+            if ($orden->cotizacion?->estado === 'aceptada'
+                && ((int) $data['cliente_id'] !== (int) $orden->cliente_id
+                    || (int) ($data['equipo_id'] ?? 0) !== (int) ($orden->equipo_id ?? 0))) {
+                throw ValidationException::withMessages([
+                    'orden' => 'El cliente y equipo de una orden con cotización aceptada no pueden cambiarse.',
+                ]);
+            }
+
             $this->validarAsignaciones($data);
             $detalles = $this->normalizarDetalles($detalles);
 
@@ -40,8 +59,8 @@ class ActualizarOrdenServicio
             }
 
             $orden->update($data);
-            $orden->detalles()->delete();
-            $orden->refacciones()->delete();
+            $orden->detalles()->whereNull('cotizacion_item_id')->delete();
+            $orden->refacciones()->whereNull('cotizacion_item_id')->delete();
 
             foreach ($detalles as $detalle) {
                 $orden->detalles()->create($this->calculadora->detalle($detalle));
@@ -51,17 +70,7 @@ class ActualizarOrdenServicio
                 $orden->refacciones()->create($this->calculadora->refaccion($refaccion));
             }
 
-            $resumen = $this->calculadora->resumen(
-                $detalles,
-                $refacciones,
-                isset($data['costo_tecnico']) ? (float) $data['costo_tecnico'] : null,
-                tienePartnerTecnico: ! empty($data['partner_tecnico_id']),
-            );
-            $orden->update([
-                'total_cliente' => $resumen['total_cliente'],
-                'utilidad_estimada' => $resumen['utilidad_estimada'],
-                'costos_incompletos' => $resumen['costos_incompletos'],
-            ]);
+            $this->recalcularTotales->ejecutar($orden);
 
             return $orden->fresh();
         });
