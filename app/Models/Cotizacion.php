@@ -110,7 +110,7 @@ class Cotizacion extends Model
         return $this->hasMany(CotizacionItem::class);
     }
 
-    /** Get the order created from this accepted quote, when one exists. */
+    /** Get the existing or newly created order linked to this quote. */
     public function ordenServicio(): HasOne
     {
         return $this->hasOne(OrdenServicio::class);

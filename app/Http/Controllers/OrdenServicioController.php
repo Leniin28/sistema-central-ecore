@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Cotizaciones\VincularCotizacionAOrden;
 use App\Actions\Ordenes\ActualizarOrdenServicio;
 use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cliente;
@@ -67,11 +68,11 @@ class OrdenServicioController extends Controller
             ->with('status', 'Orden creada correctamente.');
     }
 
-    public function show(OrdenServicio $ordenServicio): View
+    public function show(OrdenServicio $ordenServicio, VincularCotizacionAOrden $vincularOrden): View
     {
         $this->authorizeView($ordenServicio);
         $ordenServicio->load([
-            'cliente', 'equipo', 'partnerRecepcion', 'partnerTecnico', 'creadoPor',
+            'cliente', 'equipo', 'partnerRecepcion', 'partnerTecnico', 'creadoPor', 'cotizacion',
             'detalles.servicio.categoriaServicio',
             'refacciones' => fn ($query) => $query->orderBy('id'),
             'historialEstados.user',
@@ -81,6 +82,8 @@ class OrdenServicioController extends Controller
             'orden' => $ordenServicio,
             'routePrefix' => $this->routePrefix(),
             'estadosDisponibles' => $this->estadosDisponibles($ordenServicio),
+            'puedeCrearCotizacion' => auth()->user()->isAdmin()
+                && $vincularOrden->esElegibleParaNuevaCotizacion($ordenServicio),
         ]);
     }
 

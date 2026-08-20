@@ -12,7 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class CrearCotizacion
 {
-    public function __construct(private CalcularTotalesCotizacion $calculadora) {}
+    public function __construct(
+        private CalcularTotalesCotizacion $calculadora,
+        private VincularCotizacionAOrden $vincularOrden,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -62,6 +65,16 @@ class CrearCotizacion
 
             foreach ($items as $item) {
                 $cotizacion->items()->create($this->calculadora->item($item));
+            }
+
+            if (array_key_exists('orden_servicio_id', $data) && $data['orden_servicio_id'] !== null) {
+                if (! $actor) {
+                    throw ValidationException::withMessages([
+                        'orden_servicio_id' => 'La vinculación con una orden existente requiere un administrador autenticado.',
+                    ]);
+                }
+
+                $this->vincularOrden->vincular($cotizacion, (int) $data['orden_servicio_id'], $actor);
             }
 
             Log::info('Cotización creada', [

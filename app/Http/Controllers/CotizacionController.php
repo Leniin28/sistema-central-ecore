@@ -5,14 +5,17 @@ namespace App\Http\Controllers;
 use App\Actions\Cotizaciones\ActualizarCotizacion;
 use App\Actions\Cotizaciones\CambiarEstadoCotizacion;
 use App\Actions\Cotizaciones\CrearCotizacion;
+use App\Actions\Cotizaciones\VincularCotizacionAOrden;
 use App\Http\Requests\StoreCotizacionRequest;
 use App\Http\Requests\UpdateCotizacionRequest;
 use App\Models\Cliente;
 use App\Models\Cotizacion;
 use App\Models\Equipo;
+use App\Models\OrdenServicio;
 use App\Services\ExportarCotizacionPdf;
 use App\Services\ExportarCotizacionPng;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -39,12 +42,49 @@ class CotizacionController extends Controller
     /**
      * Show the form for creating a new quote.
      */
-    public function create(): View
+    public function create(Request $request, VincularCotizacionAOrden $vincularOrden): View
     {
-        return view('cotizaciones.create', [
-            'cotizacion' => new Cotizacion(['fecha' => today()]),
-            ...$this->formData(),
+        $ordenSeleccionada = null;
+
+        if ($request->filled('orden_servicio_id')) {
+            abort_unless($request->user()->isAdmin(), 403);
+            $ordenSeleccionada = OrdenServicio::query()->findOrFail($request->integer('orden_servicio_id'));
+            abort_unless($vincularOrden->esElegibleParaNuevaCotizacion($ordenSeleccionada), 404);
+        }
+
+        $cotizacion = new Cotizacion([
+            'fecha' => today(),
+            'cliente_id' => $ordenSeleccionada?->cliente_id,
+            'equipo_id' => $ordenSeleccionada?->equipo_id,
         ]);
+
+        return view('cotizaciones.create', [
+            'cotizacion' => $cotizacion,
+            ...$this->formData($cotizacion, $ordenSeleccionada),
+        ]);
+    }
+
+    public function ordenesElegibles(Request $request, VincularCotizacionAOrden $vincularOrden): JsonResponse
+    {
+        abort_unless($request->user()->isAdmin(), 403);
+        $data = $request->validate([
+            'cliente_id' => ['required', 'integer', 'exists:clientes,id'],
+            'equipo_id' => ['required', 'integer', 'exists:equipos,id'],
+            'cotizacion_id' => ['nullable', 'integer', 'exists:cotizaciones,id'],
+        ]);
+        $cotizacion = filled($data['cotizacion_id'] ?? null)
+            ? Cotizacion::query()->findOrFail($data['cotizacion_id'])
+            : null;
+
+        $ordenes = $vincularOrden
+            ->elegibles((int) $data['cliente_id'], (int) $data['equipo_id'], $cotizacion)
+            ->map(fn (OrdenServicio $orden): array => [
+                'value' => $orden->id,
+                'label' => $orden->folio.' — '.$orden->estadoLabel().' — '.$orden->fecha_recepcion?->format('d/m/Y'),
+            ])
+            ->values();
+
+        return response()->json(['data' => $ordenes]);
     }
 
     /**
@@ -81,11 +121,11 @@ class CotizacionController extends Controller
     {
         $this->autorizarAcceso($cotizacion);
         abort_unless($cotizacion->esEditable(), 403);
-        $cotizacion->load('items');
+        $cotizacion->load(['items', 'ordenServicio']);
 
         return view('cotizaciones.edit', [
             'cotizacion' => $cotizacion,
-            ...$this->formData($cotizacion),
+            ...$this->formData($cotizacion, $cotizacion->ordenServicio),
         ]);
     }
 
@@ -222,14 +262,20 @@ class CotizacionController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function formData(?Cotizacion $cotizacion = null): array
+    private function formData(?Cotizacion $cotizacion = null, ?OrdenServicio $ordenSeleccionada = null): array
     {
         $clienteId = old('cliente_id', $cotizacion?->cliente_id);
         $equipoId = old('equipo_id', $cotizacion?->equipo_id);
+        $ordenId = old('orden_servicio_id', $ordenSeleccionada?->id);
+
+        if ($ordenId && (! $ordenSeleccionada || (int) $ordenSeleccionada->id !== (int) $ordenId)) {
+            $ordenSeleccionada = OrdenServicio::query()->find($ordenId);
+        }
 
         return [
             'clienteSeleccionado' => $clienteId ? Cliente::find($clienteId) : null,
             'equipoSeleccionado' => $equipoId ? Equipo::find($equipoId) : null,
+            'ordenSeleccionada' => $ordenSeleccionada,
             'routePrefix' => $this->routePrefix(),
         ];
     }

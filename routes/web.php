@@ -58,6 +58,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('cotizaciones.plantilla');
         Route::post('cotizaciones/{cotizacion}/estado', [CotizacionController::class, 'cambiarEstado'])
             ->name('cotizaciones.estado.store');
+        Route::get('cotizaciones-ordenes-elegibles', [CotizacionController::class, 'ordenesElegibles'])
+            ->name('cotizaciones.ordenes-elegibles');
         Route::resource('cotizaciones', CotizacionController::class)
             ->parameters(['cotizaciones' => 'cotizacion']);
     });

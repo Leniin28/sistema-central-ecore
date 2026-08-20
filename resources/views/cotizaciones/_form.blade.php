@@ -86,6 +86,95 @@
         </div>
     </div>
 
+    @if (auth()->user()->isAdmin())
+        <section
+            class="rounded-lg border border-blue-200 bg-blue-50/50 p-5 dark:border-blue-900 dark:bg-blue-950/20"
+            data-orden-activa-selector
+            data-url="{{ route('admin.cotizaciones.ordenes-elegibles') }}"
+            data-cotizacion-id="{{ $cotizacion->exists ? $cotizacion->id : '' }}"
+        >
+            <div class="space-y-1">
+                <label for="orden_servicio_id" class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Orden activa relacionada</label>
+                <p class="text-sm text-neutral-600 dark:text-neutral-400">La vinculación es opcional. Si no eliges una orden, se creará una nueva al aceptar la cotización.</p>
+            </div>
+
+            <select
+                id="orden_servicio_id"
+                name="orden_servicio_id"
+                class="mt-4 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+            >
+                <option value="">No vincular — crear una nueva orden al aceptar</option>
+                @if ($ordenSeleccionada)
+                    <option value="{{ $ordenSeleccionada->id }}" selected>
+                        {{ $ordenSeleccionada->folio }} — {{ $ordenSeleccionada->estadoLabel() }} — {{ $ordenSeleccionada->fecha_recepcion?->format('d/m/Y') }}
+                    </option>
+                @endif
+            </select>
+            <p class="mt-2 text-xs text-neutral-500 dark:text-neutral-400" data-orden-activa-estado>
+                Selecciona cliente y equipo para consultar órdenes activas elegibles.
+            </p>
+            @error('orden_servicio_id')
+                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+            @enderror
+        </section>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const container = document.querySelector('[data-orden-activa-selector]');
+                if (!container) return;
+
+                const selector = container.querySelector('[name="orden_servicio_id"]');
+                const estado = container.querySelector('[data-orden-activa-estado]');
+                const cliente = document.querySelector('[name="cliente_id"]');
+                const equipo = document.querySelector('[name="equipo_id"]');
+                let consultaActual = 0;
+
+                const cargar = async (conservarSeleccion = false) => {
+                    const numeroConsulta = ++consultaActual;
+                    const seleccionAnterior = conservarSeleccion ? selector.value : '';
+                    selector.replaceChildren(new Option('No vincular — crear una nueva orden al aceptar', ''));
+
+                    if (!cliente?.value || !equipo?.value) {
+                        estado.textContent = 'Selecciona cliente y equipo para consultar órdenes activas elegibles.';
+                        return;
+                    }
+
+                    estado.textContent = 'Consultando órdenes activas…';
+                    const url = new URL(container.dataset.url, window.location.origin);
+                    url.searchParams.set('cliente_id', cliente.value);
+                    url.searchParams.set('equipo_id', equipo.value);
+                    if (container.dataset.cotizacionId) {
+                        url.searchParams.set('cotizacion_id', container.dataset.cotizacionId);
+                    }
+
+                    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                    if (numeroConsulta !== consultaActual) return;
+                    if (!response.ok) {
+                        estado.textContent = 'No fue posible consultar las órdenes elegibles.';
+                        return;
+                    }
+
+                    const ordenes = (await response.json()).data;
+                    ordenes.forEach(orden => selector.add(new Option(orden.label, orden.value)));
+                    if (seleccionAnterior && ordenes.some(orden => String(orden.value) === String(seleccionAnterior))) {
+                        selector.value = seleccionAnterior;
+                    }
+                    estado.textContent = ordenes.length
+                        ? 'Elige explícitamente una orden o conserva la opción de crear una nueva.'
+                        : 'No hay órdenes activas elegibles para este cliente y equipo.';
+                };
+
+                window.addEventListener('ecore-searchable-select:change', event => {
+                    if (!['cliente_id', 'equipo_id'].includes(event.detail.name)) return;
+                    selector.value = '';
+                    cargar();
+                });
+
+                cargar(true);
+            });
+        </script>
+    @endif
+
     <section class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
         <div class="space-y-1">
             <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Recepción del equipo</h2>

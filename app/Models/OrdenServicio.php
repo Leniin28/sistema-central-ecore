@@ -100,7 +100,7 @@ class OrdenServicio extends Model
         return $this->belongsTo(Cliente::class);
     }
 
-    /** Get the accepted quote that originated this order, when applicable. */
+    /** Get the current quote linked to this service order, when applicable. */
     public function cotizacion(): BelongsTo
     {
         return $this->belongsTo(Cotizacion::class);

@@ -7,6 +7,16 @@
             </div>
 
             <div class="flex gap-3">
+                @if (auth()->user()->isAdmin() && $orden->cotizacion)
+                    <a href="{{ route('admin.cotizaciones.show', $orden->cotizacion) }}" class="rounded-md border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40">
+                        Ver cotización
+                    </a>
+                @elseif ($puedeCrearCotizacion)
+                    <a href="{{ route('admin.cotizaciones.create', ['orden_servicio_id' => $orden->id]) }}" class="rounded-md border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40">
+                        Crear cotización
+                    </a>
+                @endif
+
                 <a href="{{ route($routePrefix.'.ordenes-servicio.nota-recepcion', $orden) }}" class="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">
                     Nota de recepción
                 </a>

@@ -27,6 +27,7 @@ class ConvertirCotizacionEnOrden
         private CalcularTotalesOrdenServicio $calculadora,
         private ObtenerUsuarioSistema $usuarioSistema,
         private ResolverPartnerLogistico $resolverPartner,
+        private VincularCotizacionAOrden $vincularOrden,
     ) {}
 
     /**
@@ -39,8 +40,9 @@ class ConvertirCotizacionEnOrden
             $cotizacion = Cotizacion::query()->lockForUpdate()->findOrFail($cotizacion->id);
             $cotizacion->loadMissing(['cliente', 'equipo', 'items']);
 
-            $ordenVinculada = $cotizacion->ordenServicio()->first();
+            $ordenVinculada = $cotizacion->ordenServicio()->lockForUpdate()->first();
             if ($ordenVinculada) {
+                $this->vincularOrden->asegurarElegible($ordenVinculada, $cotizacion, exigirEquipo: false);
                 $this->reconciliarLineas($ordenVinculada, $this->mapearItems($cotizacion));
                 $this->recalcularTotalesOrden($ordenVinculada);
 

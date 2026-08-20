@@ -34,6 +34,7 @@ class StoreCotizacionRequest extends FormRequest
         return [
             'cliente_id' => ['required', 'exists:clientes,id'],
             'equipo_id' => ['nullable', 'exists:equipos,id'],
+            'orden_servicio_id' => ['nullable', 'integer'],
             'fecha' => ['required', 'date'],
             'vigencia' => ['nullable', 'date', 'after_or_equal:fecha'],
             'tipo_recepcion' => ['nullable', Rule::in(Cotizacion::TIPOS_RECEPCION)],

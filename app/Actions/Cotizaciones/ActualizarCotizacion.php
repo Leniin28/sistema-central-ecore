@@ -11,7 +11,10 @@ use Illuminate\Validation\ValidationException;
 
 class ActualizarCotizacion
 {
-    public function __construct(private CalcularTotalesCotizacion $calculadora) {}
+    public function __construct(
+        private CalcularTotalesCotizacion $calculadora,
+        private VincularCotizacionAOrden $vincularOrden,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -62,6 +65,13 @@ class ActualizarCotizacion
 
             foreach ($items as $item) {
                 $cotizacion->items()->create($this->calculadora->item($item));
+            }
+
+            if (array_key_exists('orden_servicio_id', $data)) {
+                $ordenId = filled($data['orden_servicio_id'] ?? null)
+                    ? (int) $data['orden_servicio_id']
+                    : null;
+                $this->vincularOrden->vincular($cotizacion, $ordenId, $actor);
             }
 
             Log::info('Cotización actualizada', [
