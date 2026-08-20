@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Cotizaciones\ReconciliarCotizacionesHistoricas;
+use App\Actions\Cotizaciones\RegistrarAnticipoHistorico;
 use App\Models\CotizacionItem;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -106,3 +107,65 @@ Artisan::command(
         return self::SUCCESS;
     },
 )->purpose('Diagnostica o aplica, por caso y con huella, la reconciliación histórica cotización-orden');
+
+Artisan::command(
+    'cotizaciones:registrar-anticipo-historico
+        {cotizacion : Folio exacto de la cotización autorizada}
+        {--orden= : Folio exacto de la orden vinculada}
+        {--monto= : Monto exacto del anticipo histórico}
+        {--fecha= : Fecha financiera real en formato AAAA-MM-DD}
+        {--apply : Crea el movimiento después de validar nuevamente el caso}
+        {--actor= : ID del administrador responsable; obligatorio con --apply}',
+    function (RegistrarAnticipoHistorico $registrar): int {
+        $folioCotizacion = (string) $this->argument('cotizacion');
+        $folioOrden = (string) $this->option('orden');
+        $monto = filter_var($this->option('monto'), FILTER_VALIDATE_FLOAT);
+        $fecha = (string) $this->option('fecha');
+
+        if ($folioOrden === '' || $monto === false || $fecha === '') {
+            $this->error('Debes indicar --orden, --monto y --fecha con valores válidos.');
+
+            return self::INVALID;
+        }
+
+        try {
+            if ($this->option('apply')) {
+                $actorId = filter_var($this->option('actor'), FILTER_VALIDATE_INT);
+                if ($actorId === false) {
+                    $this->error('--apply requiere --actor con el ID de un administrador real.');
+
+                    return self::INVALID;
+                }
+
+                $resultado = $registrar->aplicar($folioCotizacion, $folioOrden, (float) $monto, $fecha, (int) $actorId);
+                $this->info($resultado['creado']
+                    ? 'Anticipo histórico registrado exactamente una vez.'
+                    : 'El anticipo histórico exacto ya estaba registrado; 0 movimientos nuevos.');
+
+                return self::SUCCESS;
+            }
+
+            $resultado = $registrar->diagnosticar($folioCotizacion, $folioOrden, (float) $monto, $fecha);
+        } catch (Throwable $exception) {
+            $this->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $this->info('DRY-RUN: no se realizaron escrituras.');
+        $this->table(['Campo', 'Valor'], [
+            ['Cotización', $resultado['cotizacion_folio'].' (#'.$resultado['cotizacion_id'].')'],
+            ['Orden', $resultado['orden_folio'].' (#'.$resultado['orden_id'].')'],
+            ['Tipo / categoría', $resultado['tipo'].' / '.$resultado['categoria']],
+            ['Monto', number_format((float) $resultado['monto'], 2, '.', '')],
+            ['Fecha financiera', $resultado['fecha']],
+            ['Descripción', $resultado['descripcion']],
+            ['Total cliente', number_format((float) $resultado['total_cliente'], 2, '.', '')],
+            ['Saldo proyectado al entregar', number_format((float) $resultado['saldo_proyectado_entrega'], 2, '.', '')],
+            ['Estado', $resultado['ya_registrado'] ? 'ya registrado exactamente' : 'listo para --apply'],
+        ]);
+        $this->comment('Para aplicar se requiere repetir los mismos parámetros y añadir --apply --actor=<ID_ADMIN>.');
+
+        return self::SUCCESS;
+    },
+)->purpose('Diagnostica o registra el único anticipo histórico autorizado');
