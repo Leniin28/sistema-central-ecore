@@ -3,6 +3,7 @@
 use App\Actions\Cotizaciones\ActualizarCotizacion;
 use App\Actions\Cotizaciones\CambiarEstadoCotizacion;
 use App\Actions\Cotizaciones\CrearCotizacion;
+use App\Actions\Cotizaciones\RegistrarAnticipoCotizacion;
 use App\Models\Cliente;
 use App\Models\Cotizacion;
 use App\Models\Equipo;
@@ -245,6 +246,28 @@ test('socio logistico no puede registrar anticipo', function () {
 
     expect(Cotizacion::count())->toBe(0)
         ->and(MovimientoFinanciero::count())->toBe(0);
+});
+
+test('socio logistico recibe error de permisos antes que el de disminución', function () {
+    $contexto = contextoAnticipos();
+    $cotizacion = crearCotizacionAnticipos($contexto, anticipo: 800);
+    $partner = Partner::create(['nombre' => 'Logística sin ajustes', 'tipo_socio' => 'logistico', 'comision_fija' => 0, 'activo' => true]);
+    $logistico = User::factory()->create([
+        'role' => 'socio_logistico',
+        'partner_id' => $partner->id,
+        'email_verified_at' => now(),
+    ]);
+
+    expect(fn () => app(RegistrarAnticipoCotizacion::class)->registrarCambio(
+        $cotizacion->fresh(),
+        800,
+        500,
+        $logistico,
+    ))
+        ->toThrow(ValidationException::class, 'Solo un administrador puede registrar o modificar anticipos.');
+
+    expect((float) $cotizacion->fresh()->anticipo)->toBe(800.0)
+        ->and((float) $cotizacion->movimientosFinancieros()->sum('monto'))->toBe(800.0);
 });
 
 test('admin aumenta anticipo de aceptada abierta y el movimiento queda ligado a la orden', function () {

@@ -254,6 +254,65 @@ test('endpoint admin lista sólo órdenes elegibles del cliente y equipo exactos
         ->assertJsonPath('data.0.label', $elegible->folio.' — Listo para entregar — '.$elegible->fecha_recepcion->format('d/m/Y'));
 });
 
+test('endpoint mantiene elegible la orden vinculada con anticipos válidos de la misma cotización', function () {
+    $datos = contextoVinculacionCotizacion();
+    $orden = ordenRecepcionParaVinculo($datos);
+    $payload = [...payloadCotizacionVinculada($datos, $orden->id), 'anticipo' => 200];
+    $cotizacion = app(CrearCotizacion::class)->ejecutar(
+        $payload,
+        $payload['items'],
+        $datos['admin'],
+    );
+    $otraOrden = ordenRecepcionParaVinculo($datos);
+    $otraOrden->movimientosFinancieros()->create([
+        'cliente_id' => $datos['cliente']->id,
+        'tipo' => 'egreso',
+        'categoria' => 'otro',
+        'monto' => 1,
+        'descripcion' => 'Movimiento incompatible de otra orden',
+        'fecha' => today(),
+    ]);
+
+    $this->actingAs($datos['admin'])
+        ->getJson(route('admin.cotizaciones.ordenes-elegibles', [
+            'cliente_id' => $datos['cliente']->id,
+            'equipo_id' => $datos['equipo']->id,
+            'cotizacion_id' => $cotizacion->id,
+        ]))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.value', $orden->id);
+});
+
+test('endpoint excluye la orden vinculada cuando tiene un movimiento incompatible', function () {
+    $datos = contextoVinculacionCotizacion();
+    $orden = ordenRecepcionParaVinculo($datos);
+    $payload = [...payloadCotizacionVinculada($datos, $orden->id), 'anticipo' => 200];
+    $cotizacion = app(CrearCotizacion::class)->ejecutar(
+        $payload,
+        $payload['items'],
+        $datos['admin'],
+    );
+    $orden->movimientosFinancieros()->create([
+        'cotizacion_id' => $cotizacion->id,
+        'cliente_id' => $datos['cliente']->id,
+        'tipo' => 'egreso',
+        'categoria' => 'otro',
+        'monto' => 1,
+        'descripcion' => 'Movimiento incompatible sintético',
+        'fecha' => today(),
+    ]);
+
+    $this->actingAs($datos['admin'])
+        ->getJson(route('admin.cotizaciones.ordenes-elegibles', [
+            'cliente_id' => $datos['cliente']->id,
+            'equipo_id' => $datos['equipo']->id,
+            'cotizacion_id' => $cotizacion->id,
+        ]))
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+});
+
 test('socio logístico no puede vincular una orden mediante un parámetro manipulado', function () {
     $datos = contextoVinculacionCotizacion();
     $orden = ordenRecepcionParaVinculo($datos);

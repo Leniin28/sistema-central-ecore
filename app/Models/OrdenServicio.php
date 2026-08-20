@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -183,11 +184,25 @@ class OrdenServicio extends Model
 
         return $this->movimientosFinancieros()
             ->where(function ($query) use ($cotizacionId): void {
-                $query->where('tipo', '!=', 'ingreso')
-                    ->orWhere('categoria', '!=', 'anticipo')
-                    ->orWhereNull('cotizacion_id')
-                    ->orWhere('cotizacion_id', '!=', $cotizacionId);
+                self::aplicarMovimientosFinancierosIncompatibles($query, $cotizacionId);
             })
             ->exists();
+    }
+
+    public function scopeSinMovimientosFinancierosIncompatibles(Builder $query, ?int $cotizacionId): Builder
+    {
+        return $query->whereDoesntHave('movimientosFinancieros', function ($query) use ($cotizacionId): void {
+            $query->where(function ($query) use ($cotizacionId): void {
+                self::aplicarMovimientosFinancierosIncompatibles($query, $cotizacionId);
+            });
+        });
+    }
+
+    private static function aplicarMovimientosFinancierosIncompatibles($query, ?int $cotizacionId): void
+    {
+        $query->where('tipo', '!=', 'ingreso')
+            ->orWhere('categoria', '!=', 'anticipo')
+            ->orWhereNull('cotizacion_id')
+            ->orWhere('cotizacion_id', '!=', $cotizacionId);
     }
 }

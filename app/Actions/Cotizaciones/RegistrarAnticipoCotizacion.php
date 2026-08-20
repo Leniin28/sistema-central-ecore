@@ -20,13 +20,6 @@ class RegistrarAnticipoCotizacion
     ): void {
         $anticipoAnterior = round($anticipoAnterior, 2);
         $anticipoNuevo = round($anticipoNuevo, 2);
-        $registrado = $this->totalRegistrado($cotizacion, bloquear: true);
-
-        if ($anticipoNuevo < $registrado) {
-            throw ValidationException::withMessages([
-                'anticipo' => 'El anticipo no puede quedar por debajo de los $'.number_format($registrado, 2).' ya registrados. Se requiere una devolución o reversión financiera explícita.',
-            ]);
-        }
 
         if ($anticipoNuevo === $anticipoAnterior) {
             return;
@@ -35,6 +28,14 @@ class RegistrarAnticipoCotizacion
         if (! $actor?->isAdmin()) {
             throw ValidationException::withMessages([
                 'anticipo' => 'Solo un administrador puede registrar o modificar anticipos.',
+            ]);
+        }
+
+        $registrado = $this->totalRegistrado($cotizacion, bloquear: true);
+
+        if ($anticipoNuevo < $registrado) {
+            throw ValidationException::withMessages([
+                'anticipo' => 'El anticipo no puede quedar por debajo de los $'.number_format($registrado, 2).' ya registrados. Se requiere una devolución o reversión financiera explícita.',
             ]);
         }
 

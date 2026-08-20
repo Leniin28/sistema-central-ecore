@@ -34,7 +34,7 @@ class VincularCotizacionAOrden
             ->where('equipo_id', $equipoId)
             ->whereIn('estado', self::ESTADOS_ACTIVOS)
             ->where('finanzas_generadas', false)
-            ->whereDoesntHave('movimientosFinancieros')
+            ->sinMovimientosFinancierosIncompatibles($cotizacion?->exists ? $cotizacion->id : null)
             ->where(function ($query) use ($cotizacion): void {
                 $query->whereNull('cotizacion_id');
 
