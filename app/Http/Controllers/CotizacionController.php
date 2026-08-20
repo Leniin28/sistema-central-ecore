@@ -106,12 +106,13 @@ class CotizacionController extends Controller
     public function show(Cotizacion $cotizacion, VincularCotizacionAOrden $vincularOrden): View
     {
         $this->autorizarAcceso($cotizacion);
-        $cotizacion->load(['items', 'cliente', 'equipo', 'partner', 'ordenServicio']);
-        $puedeEditar = $cotizacion->esEditable()
+        $cotizacion->load(['items', 'cliente', 'equipo', 'partner', 'ordenServicio', 'cotizacionCanonica']);
+        $puedeEditar = ! $cotizacion->esAbsorbida()
+            && ($cotizacion->esEditable()
             || ($cotizacion->estado === 'aceptada'
                 && auth()->user()->isAdmin()
                 && $cotizacion->ordenServicio
-                && $vincularOrden->esModificableParaCotizacion($cotizacion->ordenServicio, $cotizacion));
+                && $vincularOrden->esModificableParaCotizacion($cotizacion->ordenServicio, $cotizacion)));
 
         return view('cotizaciones.show', [
             'cotizacion' => $cotizacion,
@@ -126,6 +127,7 @@ class CotizacionController extends Controller
     public function edit(Cotizacion $cotizacion, VincularCotizacionAOrden $vincularOrden): View
     {
         $this->autorizarAcceso($cotizacion);
+        abort_if($cotizacion->esAbsorbida(), 403);
         $cotizacion->load(['items', 'ordenServicio']);
 
         if ($cotizacion->estado === 'aceptada') {
@@ -167,6 +169,7 @@ class CotizacionController extends Controller
     public function destroy(Cotizacion $cotizacion): RedirectResponse
     {
         abort_unless(auth()->user()->isAdmin(), 403);
+        $cotizacion->asegurarOperativa();
 
         try {
             $cotizacion->delete();

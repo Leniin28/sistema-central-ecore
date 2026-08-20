@@ -34,6 +34,7 @@ class ConvertirCotizacionEnOrden
     {
         return DB::transaction(function () use ($cotizacion, $data): array {
             $cotizacion = Cotizacion::query()->lockForUpdate()->findOrFail($cotizacion->id);
+            $cotizacion->asegurarOperativa();
             $cotizacion->loadMissing(['cliente', 'equipo', 'items']);
 
             $ordenVinculada = $cotizacion->ordenServicio()->lockForUpdate()->first();

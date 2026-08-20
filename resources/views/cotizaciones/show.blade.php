@@ -44,6 +44,19 @@
             </div>
         @endif
 
+        @if ($cotizacion->esAbsorbida())
+            <section class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                <p class="font-semibold">Cotización histórica consolidada</p>
+                <p class="mt-1">
+                    Cotización consolidada en
+                    <a href="{{ route($routePrefix.'.cotizaciones.show', $cotizacion->cotizacionCanonica) }}" class="font-semibold underline">
+                        {{ $cotizacion->cotizacionCanonica?->folio }}
+                    </a>.
+                    Este registro permanece disponible únicamente para consulta y auditoría.
+                </p>
+            </section>
+        @endif
+
         <div class="grid gap-6 lg:grid-cols-3">
             <section class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700 lg:col-span-2">
                 <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Conceptos</h2>
@@ -124,27 +137,29 @@
                     </dl>
                 </section>
 
-                <section class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
-                    <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Cambiar estado</h2>
+                @unless ($cotizacion->esAbsorbida())
+                    <section class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
+                        <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Cambiar estado</h2>
 
-                    <form method="POST" action="{{ route($routePrefix.'.cotizaciones.estado.store', $cotizacion) }}" class="mt-4 flex flex-col gap-3">
-                        @csrf
-                        <select
-                            name="estado"
-                            class="block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                        >
-                            @foreach (\App\Models\Cotizacion::ESTADOS as $estado)
-                                <option value="{{ $estado }}" @selected($cotizacion->estado === $estado)>{{ ucfirst($estado) }}</option>
-                            @endforeach
-                        </select>
-                        @error('estado')
-                            <p class="text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                        <button type="submit" class="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
-                            Actualizar estado
-                        </button>
-                    </form>
-                </section>
+                        <form method="POST" action="{{ route($routePrefix.'.cotizaciones.estado.store', $cotizacion) }}" class="mt-4 flex flex-col gap-3">
+                            @csrf
+                            <select
+                                name="estado"
+                                class="block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                            >
+                                @foreach (\App\Models\Cotizacion::ESTADOS as $estado)
+                                    <option value="{{ $estado }}" @selected($cotizacion->estado === $estado)>{{ ucfirst($estado) }}</option>
+                                @endforeach
+                            </select>
+                            @error('estado')
+                                <p class="text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                            <button type="submit" class="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
+                                Actualizar estado
+                            </button>
+                        </form>
+                    </section>
+                @endunless
             </div>
         </div>
     </div>

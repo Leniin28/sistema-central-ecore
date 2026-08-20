@@ -29,6 +29,8 @@ class VincularCotizacionAOrden
      */
     public function elegibles(int $clienteId, int $equipoId, ?Cotizacion $cotizacion = null): Collection
     {
+        $cotizacion?->asegurarOperativa('orden_servicio_id');
+
         return OrdenServicio::query()
             ->where('cliente_id', $clienteId)
             ->where('equipo_id', $equipoId)
@@ -58,7 +60,8 @@ class VincularCotizacionAOrden
 
     public function esModificableParaCotizacion(OrdenServicio $orden, Cotizacion $cotizacion): bool
     {
-        return (int) $orden->cotizacion_id === (int) $cotizacion->id
+        return ! $cotizacion->esAbsorbida()
+            && (int) $orden->cotizacion_id === (int) $cotizacion->id
             && (int) $orden->cliente_id === (int) $cotizacion->cliente_id
             && ($cotizacion->equipo_id === null || (int) $orden->equipo_id === (int) $cotizacion->equipo_id)
             && in_array($orden->estado, self::ESTADOS_ACTIVOS, true)
@@ -87,6 +90,7 @@ class VincularCotizacionAOrden
 
         return DB::transaction(function () use ($cotizacion, $ordenId): ?OrdenServicio {
             $cotizacion = Cotizacion::query()->lockForUpdate()->findOrFail($cotizacion->id);
+            $cotizacion->asegurarOperativa('orden_servicio_id');
             $ordenActualId = OrdenServicio::query()
                 ->where('cotizacion_id', $cotizacion->id)
                 ->value('id');
@@ -139,6 +143,8 @@ class VincularCotizacionAOrden
         Cotizacion $cotizacion,
         bool $exigirEquipo = true,
     ): void {
+        $cotizacion->asegurarOperativa('orden_servicio_id');
+
         if ($exigirEquipo && $cotizacion->equipo_id === null) {
             throw ValidationException::withMessages([
                 'orden_servicio_id' => 'La cotización debe tener un equipo para vincularse con una orden existente.',

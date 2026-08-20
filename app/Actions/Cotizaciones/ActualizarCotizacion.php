@@ -26,6 +26,7 @@ class ActualizarCotizacion
     {
         return DB::transaction(function () use ($cotizacion, $data, $items, $actor): Cotizacion {
             $cotizacion = Cotizacion::query()->lockForUpdate()->findOrFail($cotizacion->id);
+            $cotizacion->asegurarOperativa();
 
             if ($cotizacion->estado === 'aceptada') {
                 return $this->actualizarAceptada($cotizacion, $data, $items, $actor);

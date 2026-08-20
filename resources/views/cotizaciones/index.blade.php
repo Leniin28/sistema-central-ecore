@@ -56,11 +56,11 @@
                                     <div class="flex justify-end gap-3">
                                         <a href="{{ route($routePrefix.'.cotizaciones.show', $cotizacion) }}" class="font-medium text-neutral-700 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-neutral-100">Ver</a>
 
-                                        @if ($cotizacion->esEditable())
+                                        @if (! $cotizacion->esAbsorbida() && $cotizacion->esEditable())
                                             <a href="{{ route($routePrefix.'.cotizaciones.edit', $cotizacion) }}" class="font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100">Editar</a>
                                         @endif
 
-                                        @if (auth()->user()->isAdmin())
+                                        @if (auth()->user()->isAdmin() && ! $cotizacion->esAbsorbida())
                                             <form method="POST" action="{{ route('admin.cotizaciones.destroy', $cotizacion) }}" onsubmit="return confirm('¿Eliminar esta cotización?');">
                                                 @csrf
                                                 @method('DELETE')

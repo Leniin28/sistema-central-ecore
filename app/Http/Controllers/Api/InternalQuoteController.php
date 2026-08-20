@@ -13,6 +13,7 @@ use App\Services\ExportarCotizacionPng;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -203,6 +204,8 @@ class InternalQuoteController extends Controller
             'equipo.password_equipo' => ['nullable', 'string', 'max:150'],
         ]);
 
+        $cotizacion->asegurarOperativa();
+
         // Equipo mínimo: el de la cotización o uno identificable en el payload.
         if (! $cotizacion->equipo_id
             && blank($data['equipo']['tipo_equipo'] ?? null)
@@ -212,11 +215,16 @@ class InternalQuoteController extends Controller
             ]);
         }
 
-        // Idempotencia primero: un reintento del mismo external_id devuelve la
-        // orden ya creada aunque la cotización haya cambiado de estado después.
+        // Tras descartar una cotización absorbida, un reintento del mismo
+        // external_id devuelve la orden ya creada aunque el estado haya cambiado.
         $existente = OrdenServicio::query()->where('external_id', $data['external_id'])->first();
         if ($existente) {
-            return $this->respuestaConversion($cotizacion, $existente, created: false, warnings: []);
+            return DB::transaction(function () use ($cotizacion, $existente): JsonResponse {
+                $cotizacion = Cotizacion::query()->lockForUpdate()->findOrFail($cotizacion->id);
+                $cotizacion->asegurarOperativa();
+
+                return $this->respuestaConversion($cotizacion, $existente, created: false, warnings: []);
+            });
         }
 
         // Solo se convierten cotizaciones vivas. Cualquier otro estado —incluido

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Validation\ValidationException;
 
 #[Fillable([
     'cotizacion_canonica_id',
@@ -133,7 +134,26 @@ class Cotizacion extends Model
      */
     public function esEditable(): bool
     {
-        return in_array($this->estado, self::ESTADOS_EDITABLES, true);
+        return ! $this->esAbsorbida()
+            && in_array($this->estado, self::ESTADOS_EDITABLES, true);
+    }
+
+    /** Determine whether this quote was absorbed by a canonical quote. */
+    public function esAbsorbida(): bool
+    {
+        return $this->cotizacion_canonica_id !== null;
+    }
+
+    /** Reject any operational use while preserving read-only access. */
+    public function asegurarOperativa(string $campo = 'cotizacion'): void
+    {
+        if (! $this->esAbsorbida()) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            $campo => 'La cotización consolidada es histórica y no admite operaciones.',
+        ]);
     }
 
     /**
