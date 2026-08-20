@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
+    'cotizacion_canonica_id',
     'folio',
     'cliente_id',
     'equipo_id',
@@ -114,6 +115,11 @@ class Cotizacion extends Model
     public function ordenServicio(): HasOne
     {
         return $this->hasOne(OrdenServicio::class);
+    }
+
+    public function cotizacionCanonica(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'cotizacion_canonica_id');
     }
 
     /**

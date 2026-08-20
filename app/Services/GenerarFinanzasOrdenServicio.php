@@ -17,6 +17,12 @@ class GenerarFinanzasOrdenServicio
         DB::transaction(function () use ($orden): void {
             $orden = OrdenServicio::query()->lockForUpdate()->findOrFail($orden->id);
 
+            if ($orden->orden_canonica_id !== null) {
+                throw ValidationException::withMessages([
+                    'estado_nuevo' => 'La orden fue consolidada mediante reconciliación histórica y nunca puede generar finanzas.',
+                ]);
+            }
+
             if ($orden->finanzas_generadas) {
                 return;
             }

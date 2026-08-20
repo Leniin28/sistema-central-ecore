@@ -1,93 +1,108 @@
 <?php
 
-use App\Models\Cotizacion;
+use App\Actions\Cotizaciones\ReconciliarCotizacionesHistoricas;
 use App\Models\CotizacionItem;
-use App\Models\OrdenServicio;
 use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Schema;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Artisan::command('cotizaciones:reconciliar-ordenes {--dry-run : Reporta el plan sin modificar datos}', function (): int {
-    if (! $this->option('dry-run')) {
-        $this->error('Por seguridad este comando requiere --dry-run; todavía no existe un modo de escritura.');
+Artisan::command(
+    'cotizaciones:reconciliar-ordenes
+        {--dry-run : Fuerza explícitamente el modo de solo diagnóstico}
+        {--apply : Aplica exactamente un caso autorizado}
+        {--case= : Clave exacta del caso histórico}
+        {--fingerprint= : Huella SHA-256 obtenida del dry-run}
+        {--actor= : ID del administrador responsable}',
+    function (ReconciliarCotizacionesHistoricas $reconciliar): int {
+        $aplicar = (bool) $this->option('apply');
+        $caseKey = filled($this->option('case')) ? (string) $this->option('case') : null;
 
-        return self::INVALID;
-    }
+        if ($aplicar && $this->option('dry-run')) {
+            $this->error('--apply y --dry-run son excluyentes.');
 
-    $tieneTrazabilidad = Schema::hasColumn('ordenes_servicio', 'cotizacion_id');
-    $tieneCostos = Schema::hasColumns('cotizacion_items', ['costo_unitario', 'costo_total']);
-    $clasificadas = Cotizacion::query()->orderBy('id')->get(['id', 'folio', 'estado'])
-        ->map(function (Cotizacion $cotizacion) use ($tieneTrazabilidad): array {
-            $candidatos = collect();
-            if ($tieneTrazabilidad) {
-                $candidatos = $candidatos->merge(
-                    OrdenServicio::query()->where('cotizacion_id', $cotizacion->id)->pluck('id'),
-                );
+            return self::INVALID;
+        }
+
+        if ($aplicar) {
+            $fingerprint = (string) $this->option('fingerprint');
+            $actorId = filter_var($this->option('actor'), FILTER_VALIDATE_INT);
+            if ($caseKey === null || $fingerprint === '' || $actorId === false) {
+                $this->error('--apply requiere --case, --fingerprint y --actor.');
+
+                return self::INVALID;
             }
 
-            // Legacy notes are diagnostic evidence only. They never authorize
-            // an automatic write, and multiple candidates are always Case D.
-            $candidatos = $candidatos->merge(
-                OrdenServicio::query()
-                    ->where('origen', 'openclaw-cotizacion')
-                    ->where('notas', 'like', '%'.$cotizacion->folio.'%')
-                    ->pluck('id'),
-            )->unique()->values();
+            try {
+                $resultado = $reconciliar->aplicar($caseKey, $fingerprint, (int) $actorId);
+            } catch (Throwable $exception) {
+                $this->error($exception->getMessage());
 
-            $clasificacion = $cotizacion->estado !== 'aceptada'
-                ? 'C'
-                : match ($candidatos->count()) {
-                    0 => 'B',
-                    1 => 'A',
-                    default => 'D',
-                };
+                return self::FAILURE;
+            }
 
-            return [
-                'clasificacion' => $clasificacion,
-                'folio' => $cotizacion->folio,
-                'candidatos' => $candidatos,
-            ];
-        });
+            $this->info($resultado['aplicada']
+                ? "Caso {$caseKey} aplicado y auditado con registro #{$resultado['id']}."
+                : "Caso {$caseKey} ya había sido aplicado; no se realizaron cambios.");
 
-    $conteos = $clasificadas->countBy('clasificacion');
-    $desconocidos = $tieneCostos
-        ? CotizacionItem::query()->whereNull('costo_unitario')->orWhereNull('costo_total')->count()
-        : CotizacionItem::query()->count();
-
-    $this->table(['Clasificación', 'Total', 'Cambio propuesto'], [
-        ['Cotizaciones encontradas', $clasificadas->count(), 'Solo diagnóstico'],
-        ['A: aceptada con orden inequívoca', $conteos->get('A', 0), 'Vincular y copiar solo líneas faltantes'],
-        ['B: aceptada sin orden', $conteos->get('B', 0), 'Crear orden con la conversión segura'],
-        ['C: no aceptada', $conteos->get('C', 0), 'No modificar'],
-        ['D: relación ambigua', $conteos->get('D', 0), 'No modificar; resolver manualmente'],
-        [$tieneCostos ? 'Líneas con costo interno desconocido (NULL)' : 'Líneas sin columnas de costo (desconocidas)', $desconocidos, 'No inventar ni completar costos'],
-    ]);
-    $this->comment('Caso D detectado: '.$conteos->get('D', 0));
-
-    $ambiguas = $clasificadas->filter(
-        fn (array $fila): bool => $fila['clasificacion'] === 'D',
-    )->values();
-    if ($ambiguas->isNotEmpty()) {
-        $this->newLine();
-        $this->warn('Pendientes de reconciliación manual (Caso D):');
-        $this->table(['Cotización', 'Órdenes candidatas', 'Motivo'], $ambiguas->map(fn (array $fila): array => [
-            $fila['folio'],
-            implode(', ', $fila['candidatos']->map(fn (int $id): string => '#'.$id)->all()),
-            'Múltiples órdenes con evidencia estructurada o histórica.',
-        ])->all());
-        foreach ($ambiguas as $fila) {
-            $this->comment($fila['folio'].': candidatos '
-                .implode(', ', $fila['candidatos']->map(fn (int $id): string => '#'.$id)->all())
-                .'; motivo: múltiples órdenes con evidencia estructurada o histórica.');
+            return self::SUCCESS;
         }
-    }
 
-    $this->comment('Dry-run: no se modificaron cotizaciones, órdenes, líneas ni movimientos financieros.');
+        try {
+            $planes = $reconciliar->diagnosticar($caseKey);
+        } catch (Throwable $exception) {
+            $this->error($exception->getMessage());
 
-    return self::SUCCESS;
-})->purpose('Clasifica cotizaciones históricas y propone una reconciliación sin escribir datos');
+            return self::INVALID;
+        }
+
+        $this->info('Cutoff histórico verificado por Git: '
+            .config('historical_quote_reconciliation.cutoff.commit').' @ '
+            .config('historical_quote_reconciliation.cutoff.committed_at'));
+        $this->table(
+            ['Caso', 'Estado', 'Cotización canónica', 'Orden canónica', 'Servicios provisionales', 'Refacciones manuales', 'Total cotización', 'Total orden'],
+            $planes->map(fn (array $plan): array => [
+                $plan['key'],
+                $plan['status'],
+                $plan['canonical_quote'],
+                $plan['canonical_order'],
+                $plan['provisional_services_to_delete'],
+                $plan['manual_refactions_preserved'],
+                $plan['projected_quote_total'] === null ? '-' : number_format((float) $plan['projected_quote_total'], 2, '.', ''),
+                $plan['projected_order_total'] === null ? '-' : number_format((float) $plan['projected_order_total'], 2, '.', ''),
+            ])->all(),
+        );
+
+        foreach ($planes as $plan) {
+            $this->newLine();
+            $this->line("Caso {$plan['key']}: {$plan['status']}");
+            $this->line('  Cotizaciones origen: '.(implode(', ', $plan['source_quotes']) ?: 'ninguna'));
+            $this->line('  Órdenes origen: '.(implode(', ', $plan['source_orders']) ?: 'ninguna'));
+            foreach ($plan['reasons'] as $reason) {
+                $this->line('  - '.$reason);
+            }
+            if ($plan['fingerprint'] !== null) {
+                $this->line('  Huella: '.$plan['fingerprint']);
+            }
+        }
+
+        $protegidas = $reconciliar->protegidasPorFinanzas();
+        if ($protegidas->isNotEmpty()) {
+            $this->newLine();
+            $this->warn('Cotizaciones excluidas absolutamente por finanzas:');
+            $this->table(['Cotización', 'Orden', 'Finanzas generadas', 'Movimientos'], $protegidas->all());
+        }
+
+        $desconocidos = CotizacionItem::query()
+            ->whereNull('costo_unitario')
+            ->orWhereNull('costo_total')
+            ->count();
+        $this->newLine();
+        $this->comment("Líneas con costo interno desconocido (NULL): {$desconocidos}. No se infieren ni completan.");
+        $this->comment('Dry-run por defecto: no se modificaron cotizaciones, órdenes, líneas, estados, auditorías ni movimientos financieros.');
+
+        return self::SUCCESS;
+    },
+)->purpose('Diagnostica o aplica, por caso y con huella, la reconciliación histórica cotización-orden');

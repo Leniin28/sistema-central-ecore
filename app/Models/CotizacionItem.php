@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'cotizacion_id',
+    'cotizacion_origen_id',
     'servicio_id',
     'tipo',
     'descripcion',
@@ -49,6 +50,11 @@ class CotizacionItem extends Model
     public function cotizacion(): BelongsTo
     {
         return $this->belongsTo(Cotizacion::class);
+    }
+
+    public function cotizacionOrigen(): BelongsTo
+    {
+        return $this->belongsTo(Cotizacion::class, 'cotizacion_origen_id');
     }
 
     public function servicio(): BelongsTo

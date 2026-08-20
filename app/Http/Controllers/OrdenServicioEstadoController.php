@@ -33,6 +33,7 @@ class OrdenServicioEstadoController extends Controller
             DB::transaction(function () use ($ordenServicio, $data, $validarCostoTecnico): void {
                 $ordenServicio = OrdenServicio::query()->lockForUpdate()->findOrFail($ordenServicio->id);
                 $this->authorizeChange($ordenServicio);
+                abort_if($ordenServicio->orden_canonica_id !== null, 403);
                 abort_if($ordenServicio->estado === 'entregado' || $ordenServicio->finanzas_generadas, 403);
                 abort_if($data['estado_nuevo'] === $ordenServicio->estado, 403);
                 abort_unless(in_array($data['estado_nuevo'], $this->estadosDisponibles($ordenServicio), true), 403);
@@ -99,7 +100,7 @@ class OrdenServicioEstadoController extends Controller
      */
     private function estadosDisponibles(OrdenServicio $orden): array
     {
-        if ($orden->estado === 'entregado' || $orden->finanzas_generadas) {
+        if ($orden->orden_canonica_id !== null || $orden->estado === 'entregado' || $orden->finanzas_generadas) {
             return [];
         }
 

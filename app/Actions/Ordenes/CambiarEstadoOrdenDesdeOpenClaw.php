@@ -50,6 +50,12 @@ class CambiarEstadoOrdenDesdeOpenClaw
                 return $this->resultado($orden, cambiado: false, duplicado: true, estadoAnterior: null);
             }
 
+            if ($orden->orden_canonica_id !== null) {
+                throw new OrdenBloqueadaException(
+                    "La orden {$orden->folio} fue consolidada en {$orden->ordenCanonica?->folio}; no admite cambios ni finanzas.",
+                );
+            }
+
             if ($orden->finanzas_generadas || $orden->estado === 'entregado') {
                 throw new OrdenBloqueadaException(
                     "La orden {$orden->folio} ya está entregada/cerrada (finanzas generadas); no admite más cambios de estado.",
