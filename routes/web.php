@@ -48,6 +48,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('ordenes-servicio.costos.update');
         Route::post('ordenes-servicio/{ordenServicio}/reembolso', [OrdenServicioAjusteController::class, 'reembolso'])
             ->name('ordenes-servicio.reembolso.store');
+        Route::post('ordenes-servicio/{ordenServicio}/costo-interno', [OrdenServicioAjusteController::class, 'costoInterno'])
+            ->name('ordenes-servicio.costo-interno.store');
         Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion', [OrdenServicioController::class, 'notaRecepcion'])
             ->name('ordenes-servicio.nota-recepcion');
         Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion/pdf', [OrdenServicioController::class, 'notaRecepcionPdf'])

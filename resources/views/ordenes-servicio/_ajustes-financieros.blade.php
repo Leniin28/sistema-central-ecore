@@ -68,6 +68,55 @@
             <p class="text-xs text-neutral-500 dark:text-neutral-400">Esta orden ya fue reembolsada en su totalidad.</p>
         @endif
 
+        @if ($orden->detalles->isNotEmpty() || $orden->refacciones->isNotEmpty())
+            <details class="rounded-md border border-neutral-200 p-3 dark:border-neutral-700">
+                <summary class="cursor-pointer text-sm font-medium text-neutral-700 hover:underline dark:text-neutral-300">Corregir costo interno</summary>
+                <form method="POST" action="{{ route('admin.ordenes-servicio.costo-interno.store', $orden) }}" class="mt-3 grid gap-3 sm:grid-cols-2">
+                    @csrf
+                    <div>
+                        <label for="costo_linea" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Línea a corregir</label>
+                        <select id="costo_linea" name="linea" required class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100" onchange="const [tipo, id] = this.value.split(':'); this.form.linea_tipo.value = tipo; this.form.linea_id.value = id;">
+                            <option value="" disabled selected>Selecciona una línea</option>
+                            @foreach ($orden->detalles as $detalle)
+                                <option value="servicio:{{ $detalle->id }}">Servicio: {{ $detalle->descripcion }} (costo actual: {{ $detalle->costo_unitario === null ? 'sin capturar' : '$'.number_format($detalle->costo_unitario, 2) }})</option>
+                            @endforeach
+                            @foreach ($orden->refacciones as $refaccion)
+                                <option value="refaccion:{{ $refaccion->id }}">Refacción: {{ $refaccion->descripcion }} (costo actual: {{ $refaccion->costo_unitario === null ? 'sin capturar' : '$'.number_format($refaccion->costo_unitario, 2) }})</option>
+                            @endforeach
+                        </select>
+                        <input type="hidden" name="linea_tipo">
+                        <input type="hidden" name="linea_id">
+                        @error('linea_tipo')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                        @error('linea_id')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div>
+                        <label for="costo_nuevo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Costo unitario correcto</label>
+                        <input id="costo_nuevo" name="costo_nuevo" type="number" step="0.01" min="0" required class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
+                        @error('costo_nuevo')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label for="costo_motivo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Motivo (obligatorio)</label>
+                        <textarea id="costo_motivo" name="motivo" rows="2" required class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"></textarea>
+                        @error('motivo')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div class="sm:col-span-2">
+                        <button type="submit" class="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
+                            Confirmar corrección
+                        </button>
+                        <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">El costo original no se borra: se registra un movimiento compensatorio por la diferencia.</p>
+                    </div>
+                </form>
+            </details>
+        @endif
+
         @if ($orden->ajustesFinancieros->isNotEmpty())
             <div class="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
                 <div class="overflow-x-auto">

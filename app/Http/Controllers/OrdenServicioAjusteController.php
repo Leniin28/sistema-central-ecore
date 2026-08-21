@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Finanzas\CorregirCostoInternoOrdenEntregada;
 use App\Actions\Finanzas\RegistrarReembolsoOrdenServicio;
 use App\Models\OrdenServicio;
 use Carbon\CarbonImmutable;
@@ -43,5 +44,35 @@ class OrdenServicioAjusteController extends Controller
         return redirect()
             ->route('admin.ordenes-servicio.show', $ordenServicio)
             ->with('status', 'Reembolso registrado correctamente. La venta original no se modificó.');
+    }
+
+    public function costoInterno(
+        Request $request,
+        OrdenServicio $ordenServicio,
+        CorregirCostoInternoOrdenEntregada $accion,
+    ): RedirectResponse {
+        $data = $request->validate([
+            'linea_tipo' => ['required', 'in:servicio,refaccion'],
+            'linea_id' => ['required', 'integer', 'min:1'],
+            'costo_nuevo' => ['required', 'numeric', 'min:0'],
+            'motivo' => ['required', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $accion->ejecutar(
+                $ordenServicio,
+                $data['linea_tipo'],
+                (int) $data['linea_id'],
+                (float) $data['costo_nuevo'],
+                $data['motivo'],
+                $request->user(),
+            );
+        } catch (ValidationException $exception) {
+            return back()->withErrors($exception->errors())->withInput();
+        }
+
+        return redirect()
+            ->route('admin.ordenes-servicio.show', $ordenServicio)
+            ->with('status', 'Costo interno corregido correctamente.');
     }
 }
