@@ -152,9 +152,9 @@
                     <p class="mt-2 text-2xl font-semibold text-neutral-900 dark:text-neutral-100">${{ number_format($ticketPromedio, 2) }}</p>
                 </div>
                 <div class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
-                    <h3 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Utilidad conocida</h3>
-                    <p class="mt-2 text-2xl font-semibold text-emerald-700 dark:text-emerald-300">${{ number_format($utilidadConocida, 2) }}</p>
-                    <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Solo órdenes sin costos pendientes.</p>
+                    <h3 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Utilidad efectiva conocida</h3>
+                    <p class="mt-2 text-2xl font-semibold text-emerald-700 dark:text-emerald-300">${{ number_format($utilidadEfectivaConocida, 2) }}</p>
+                    <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Solo órdenes sin costos pendientes. Incluye reembolsos registrados.</p>
                 </div>
                 <div class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
                     <h3 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Con costos pendientes/incompletos</h3>

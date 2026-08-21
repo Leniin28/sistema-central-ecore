@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Finanzas\RegistrarReembolsoOrdenServicio;
 use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cliente;
 use App\Models\Equipo;
@@ -202,7 +203,7 @@ test('operación cuenta solo entregadas, excluye no entregadas, canceladas y con
         ->and($response->viewData('ticketPromedio'))->toBe(round(3500 / 3, 2));
 });
 
-test('utilidad conocida excluye órdenes entregadas con costos incompletos', function () {
+test('utilidad efectiva conocida excluye órdenes entregadas con costos incompletos', function () {
     $contexto = contextoFinanzasResumen();
     ordenEntregadaResumen($contexto, ['utilidad_neta' => 400, 'costos_incompletos' => false]);
     ordenEntregadaResumen($contexto, ['utilidad_neta' => 999, 'costos_incompletos' => true]);
@@ -210,9 +211,21 @@ test('utilidad conocida excluye órdenes entregadas con costos incompletos', fun
     $response = $this->actingAs($contexto['admin'])
         ->get(route('admin.finanzas.resumen', ['periodo' => 'hoy']));
 
-    expect($response->viewData('utilidadConocida'))->toBe(400.0)
+    expect($response->viewData('utilidadEfectivaConocida'))->toBe(400.0)
         ->and($response->viewData('ordenesConCostosIncompletos'))->toBe(1);
     $response->assertSee('Con costos pendientes');
+});
+
+test('utilidad efectiva conocida se reduce por reembolsos de órdenes con costos completos', function () {
+    $contexto = contextoFinanzasResumen();
+    $orden = ordenEntregadaResumen($contexto, ['utilidad_neta' => 650, 'total_cliente' => 1500, 'costos_incompletos' => false]);
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 300, 'motivo', $contexto['admin']);
+
+    $response = $this->actingAs($contexto['admin'])
+        ->get(route('admin.finanzas.resumen', ['periodo' => 'hoy']));
+
+    expect($response->viewData('utilidadEfectivaConocida'))->toBe(350.0);
+    $response->assertSee('Utilidad efectiva conocida');
 });
 
 test('sin órdenes entregadas el ticket promedio es cero sin división inválida', function () {

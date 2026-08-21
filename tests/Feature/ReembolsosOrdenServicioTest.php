@@ -1,7 +1,10 @@
 <?php
 
 use App\Actions\Cotizaciones\CrearCotizacion;
+use App\Actions\Finanzas\CorregirComisionOrdenEntregada;
+use App\Actions\Finanzas\CorregirCostoInternoOrdenEntregada;
 use App\Actions\Finanzas\RegistrarReembolsoOrdenServicio;
+use App\Actions\Ordenes\CalcularTotalesOrdenServicio;
 use App\Models\AjusteFinancieroOrden;
 use App\Models\Cliente;
 use App\Models\Equipo;
@@ -302,6 +305,145 @@ test('el detalle de la orden renderiza la sección de ajustes financieros para a
         ->assertSee('Ajustes financieros')
         ->assertSee('Venta neta')
         ->assertSee('motivo visible');
+});
+
+// --- utilidad efectiva: utilidad_neta es snapshot, nunca se reescribe ----
+
+test('sin reembolso la utilidad efectiva es igual a la utilidad neta', function () {
+    $orden = ordenEntregadaParaReembolso(['costo_tecnico' => 850]);
+
+    expect($orden->utilidadEfectiva())->toBe(650.0);
+});
+
+test('reembolso parcial reduce la utilidad efectiva sin tocar utilidad_neta', function () {
+    $orden = ordenEntregadaParaReembolso(['costo_tecnico' => 850]);
+    $actor = adminReembolso();
+
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 300, 'motivo', $actor);
+
+    $orden->refresh();
+    expect((float) $orden->utilidad_neta)->toBe(650.0)
+        ->and($orden->utilidadEfectiva())->toBe(350.0);
+});
+
+test('reembolso total puede dejar la utilidad efectiva negativa sin acotarla a cero', function () {
+    $orden = ordenEntregadaParaReembolso(['costo_tecnico' => 850]);
+    $actor = adminReembolso();
+
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 1500, 'devolución total', $actor);
+
+    $orden->refresh();
+    expect((float) $orden->utilidad_neta)->toBe(650.0)
+        ->and($orden->utilidadEfectiva())->toBe(-850.0);
+});
+
+test('múltiples reembolsos reducen la utilidad efectiva acumulativamente', function () {
+    $orden = ordenEntregadaParaReembolso(['costo_tecnico' => 850]);
+    $actor = adminReembolso();
+
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 300, 'primero', $actor);
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 200, 'segundo', $actor);
+
+    $orden->refresh();
+    expect((float) $orden->utilidad_neta)->toBe(650.0)
+        ->and($orden->totalReembolsado())->toBe(500.0)
+        ->and($orden->utilidadEfectiva())->toBe(150.0);
+});
+
+test('una corrección de costo tras un reembolso sigue actualizando utilidad_neta y la utilidad efectiva la refleja', function () {
+    $admin = adminReembolso();
+    $cliente = Cliente::create(['nombre' => 'Cliente correccion tras reembolso', 'telefono' => '4491113310', 'tipo_cliente' => 'mantenimiento']);
+
+    $orden = OrdenServicio::create([
+        'folio' => 'OS-REEMB-CORR-'.fake()->unique()->numerify('#####'),
+        'cliente_id' => $cliente->id,
+        'creado_por_user_id' => $admin->id,
+        'tipo_recepcion' => 'directo',
+        'estado' => 'recibido',
+        'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_COSTOS_POR_LINEA,
+        'total_cliente' => 0,
+        'comision_recepcion' => 0,
+        'utilidad_estimada' => 0,
+        'utilidad_neta' => 0,
+        'costos_incompletos' => false,
+        'finanzas_generadas' => false,
+    ]);
+
+    $detalle = $orden->detalles()->create(app(CalcularTotalesOrdenServicio::class)->detalle([
+        'descripcion' => 'Servicio corrección tras reembolso',
+        'cantidad' => 1,
+        'precio_unitario' => 1500,
+        'costo_unitario' => 850,
+    ]));
+
+    $orden->update(['total_cliente' => 1500]);
+    $orden->update(['estado' => 'entregado', 'fecha_entrega' => today()]);
+    app(GenerarFinanzasOrdenServicio::class)->generar($orden->fresh());
+    $orden->refresh();
+
+    expect((float) $orden->utilidad_neta)->toBe(650.0);
+
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 300, 'reembolso', $admin);
+
+    app(CorregirCostoInternoOrdenEntregada::class)->ejecutar(
+        $orden->fresh(), 'servicio', $detalle->id, 750, 'costo real era menor', $admin,
+    );
+
+    $orden->refresh();
+    expect((float) $orden->utilidad_neta)->toBe(750.0)
+        ->and($orden->totalReembolsado())->toBe(300.0)
+        ->and($orden->utilidadEfectiva())->toBe(450.0);
+});
+
+test('una corrección de comisión tras un reembolso sigue actualizando utilidad_neta y la utilidad efectiva la refleja', function () {
+    $orden = ordenEntregadaParaReembolso(['costo_tecnico' => 850, 'comision_logistica' => 0]);
+    $admin = adminReembolso();
+
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 300, 'reembolso', $admin);
+
+    app(CorregirComisionOrdenEntregada::class)->ejecutar(
+        $orden->fresh(), 100, 'comisión real distinta', $admin,
+    );
+
+    $orden->refresh();
+    expect((float) $orden->utilidad_neta)->toBe(550.0)
+        ->and($orden->totalReembolsado())->toBe(300.0)
+        ->and($orden->utilidadEfectiva())->toBe(250.0);
+});
+
+test('el detalle de la orden muestra utilidad al entregar, reembolsado y utilidad efectiva cuando hay reembolsos', function () {
+    $orden = ordenEntregadaParaReembolso(['costo_tecnico' => 850]);
+    $admin = adminReembolso();
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 300, 'motivo', $admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.ordenes-servicio.show', $orden))
+        ->assertOk()
+        ->assertSee('Utilidad al entregar')
+        ->assertSee('Utilidad efectiva');
+});
+
+test('socio logistico y socio tecnico no ven utilidad efectiva ni ajustes financieros en el detalle', function () {
+    $orden = ordenEntregadaParaReembolso(['costo_tecnico' => 850]);
+    $admin = adminReembolso();
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 300, 'motivo', $admin);
+
+    $logistico = User::factory()->create(['role' => 'socio_logistico', 'email_verified_at' => now()]);
+    $tecnico = User::factory()->create(['role' => 'socio_tecnico', 'email_verified_at' => now()]);
+
+    $this->actingAs($logistico)
+        ->get(route('logistica.ordenes-servicio.show', $orden))
+        ->assertOk()
+        ->assertDontSee('Utilidad al entregar')
+        ->assertDontSee('Utilidad efectiva')
+        ->assertDontSee('Ajustes financieros');
+
+    $this->actingAs($tecnico)
+        ->get(route('tecnico.ordenes-servicio.show', $orden))
+        ->assertOk()
+        ->assertDontSee('Utilidad al entregar')
+        ->assertDontSee('Utilidad efectiva')
+        ->assertDontSee('Ajustes financieros');
 });
 
 test('una orden cancelada bloquea el reembolso', function () {

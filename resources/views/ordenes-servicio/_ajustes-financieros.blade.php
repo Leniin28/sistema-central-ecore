@@ -27,6 +27,38 @@
         </dl>
 
         @php
+            $tieneReembolsos = $orden->totalReembolsado() > 0;
+        @endphp
+
+        {{-- utilidad_neta: snapshot de utilidad al cierre/entrega, nunca reescrito por un reembolso.
+             Utilidad efectiva: utilidad_neta menos los reembolsos estructurados de esta orden; puede ser negativa. --}}
+        @if ($tieneReembolsos)
+            <dl class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Utilidad al entregar</dt>
+                    <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">${{ number_format($orden->utilidad_neta, 2) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Reembolsado</dt>
+                    <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">${{ number_format($orden->totalReembolsado(), 2) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Utilidad efectiva</dt>
+                    <dd class="mt-1 text-sm font-semibold {{ $orden->utilidadEfectiva() < 0 ? 'text-red-700 dark:text-red-300' : 'text-neutral-900 dark:text-neutral-100' }}">
+                        ${{ number_format($orden->utilidadEfectiva(), 2) }}
+                    </dd>
+                </div>
+            </dl>
+        @else
+            <dl class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Utilidad</dt>
+                    <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">${{ number_format($orden->utilidad_neta, 2) }}</dd>
+                </div>
+            </dl>
+        @endif
+
+        @php
             $estadoReembolso = $orden->estadoReembolso();
             $estadoReembolsoLabel = match ($estadoReembolso) {
                 'reembolso_total' => 'Reembolso total',

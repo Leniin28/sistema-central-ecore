@@ -18,11 +18,18 @@ use Illuminate\View\View;
  * - "Flujo financiero" is dated by MovimientoFinanciero.fecha (when money
  *   actually moved) and reports ingresos/egresos/balance -- never "utilidad".
  * - "Operación" is dated by OrdenServicio.fecha_entrega (when an order
- *   closed) and reports counts/ventas/utilidad conocida for delivered,
- *   non-cancelled, non-consolidated orders only.
+ *   closed) and reports counts/ventas/utilidad efectiva conocida for
+ *   delivered, non-cancelled, non-consolidated orders only.
  *
  * Both use the same calendar range, each against its own date column. No
  * writes happen anywhere in this controller.
+ *
+ * "Utilidad efectiva conocida" suma OrdenServicio::utilidadEfectiva() (ver
+ * docblock del modelo), no utilidad_neta directamente: una orden entregada en
+ * agosto y reembolsada en septiembre sigue apareciendo en la operación de
+ * agosto con su venta bruta intacta, pero su utilidad efectiva ya refleja el
+ * reembolso de septiembre. Esto es un resumen operativo actual de las
+ * órdenes seleccionadas, no una utilidad histórica "as-of" del periodo.
  */
 class FinanzasResumenController extends Controller
 {
@@ -77,7 +84,16 @@ class FinanzasResumenController extends Controller
         $ordenesEntregadasCount = (clone $ordenesEntregadasQuery)->count();
         $ventasEntregadas = (float) (clone $ordenesEntregadasQuery)->sum('total_cliente');
         $ticketPromedio = $ordenesEntregadasCount > 0 ? round($ventasEntregadas / $ordenesEntregadasCount, 2) : 0.0;
-        $utilidadConocida = (float) (clone $ordenesEntregadasQuery)->where('costos_incompletos', false)->sum('utilidad_neta');
+
+        $ordenesConCostosCompletos = (clone $ordenesEntregadasQuery)
+            ->where('costos_incompletos', false)
+            ->with(['ajustesFinancieros' => fn ($query) => $query->where('tipo', AjusteFinancieroOrden::TIPO_REEMBOLSO_CLIENTE)])
+            ->get(['id', 'utilidad_neta']);
+        $utilidadEfectivaConocida = round(
+            $ordenesConCostosCompletos->sum(fn (OrdenServicio $orden): float => $orden->utilidadEfectiva()),
+            2,
+        );
+
         $ordenesConCostosIncompletos = (clone $ordenesEntregadasQuery)->where('costos_incompletos', true)->count();
 
         $ordenesEntregadas = (clone $ordenesEntregadasQuery)
@@ -98,7 +114,7 @@ class FinanzasResumenController extends Controller
             'ordenesEntregadasCount' => $ordenesEntregadasCount,
             'ventasEntregadas' => $ventasEntregadas,
             'ticketPromedio' => $ticketPromedio,
-            'utilidadConocida' => $utilidadConocida,
+            'utilidadEfectivaConocida' => $utilidadEfectivaConocida,
             'ordenesConCostosIncompletos' => $ordenesConCostosIncompletos,
             'ordenesEntregadas' => $ordenesEntregadas,
         ]);

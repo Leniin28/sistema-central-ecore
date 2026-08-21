@@ -233,9 +233,29 @@ class OrdenServicio extends Model
     /** Structured sum of all reembolso_cliente adjustments registered for this order. */
     public function totalReembolsado(): float
     {
+        if ($this->relationLoaded('ajustesFinancieros')) {
+            return (float) $this->ajustesFinancieros
+                ->where('tipo', AjusteFinancieroOrden::TIPO_REEMBOLSO_CLIENTE)
+                ->sum('delta');
+        }
+
         return (float) $this->ajustesFinancieros()
             ->where('tipo', AjusteFinancieroOrden::TIPO_REEMBOLSO_CLIENTE)
             ->sum('delta');
+    }
+
+    /**
+     * utilidad_neta es el snapshot de utilidad al momento del cierre/entrega:
+     * nunca se reescribe por un reembolso, sólo por correcciones de costo o
+     * comisión que corrigen la operación original.
+     *
+     * utilidadEfectiva() es el resultado económico actual: utilidad_neta menos
+     * los reembolsos estructurados de esta orden. No se limita a cero -- los
+     * costos ya ocurrieron aunque se haya devuelto toda la venta.
+     */
+    public function utilidadEfectiva(): float
+    {
+        return round((float) $this->utilidad_neta - $this->totalReembolsado(), 2);
     }
 
     /** Net sale after refunds, never negative. */
