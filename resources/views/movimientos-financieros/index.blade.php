@@ -17,6 +17,12 @@
             </div>
         @endif
 
+        @if ($errors->has('movimiento'))
+            <div class="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+                {{ $errors->first('movimiento') }}
+            </div>
+        @endif
+
         <section class="grid gap-4 md:grid-cols-3">
             <div class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
                 <h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Total ingresos</h2>

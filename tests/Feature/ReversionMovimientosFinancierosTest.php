@@ -125,7 +125,7 @@ test('el motivo de reversion es obligatorio', function () {
 
     $this->actingAs($admin)
         ->post(route('admin.movimientos-financieros.revertir', $original), [])
-        ->assertSessionHasErrors('motivo_reversion');
+        ->assertSessionHasErrors(['motivo_reversion' => 'El motivo es obligatorio para registrar esta reversión.']);
 
     expect(MovimientoFinanciero::count())->toBe(1);
 });
@@ -146,9 +146,76 @@ test('un movimiento original no puede revertirse dos veces', function () {
     app(RevertirMovimientoFinanciero::class)->ejecutar($original, 'primera reversion', $actor);
 
     expect(fn () => app(RevertirMovimientoFinanciero::class)->ejecutar($original->fresh(), 'segunda reversion', $actor))
-        ->toThrow(ValidationException::class);
+        ->toThrow(ValidationException::class, 'Este movimiento ya fue revertido.');
 
     expect(MovimientoFinanciero::count())->toBe(2);
+});
+
+/**
+ * FASE J.8: dos reversiones realmente simultáneas sobre el mismo movimiento
+ * pueden pasar ambas el chequeo yaRevertido() bajo lockForUpdate() y chocar
+ * en el INSERT contra el UNIQUE de movimiento_original_id. Simular dos
+ * conexiones concurrentes reales está fuera de alcance para un test
+ * automatizado de un solo proceso; en su lugar confirmamos el contrato del
+ * que depende el catch(QueryException) de la Action: el UNIQUE sigue
+ * protegido a nivel de base de datos con SQLSTATE 23000, el mismo código
+ * que la Action traduce a un mensaje amigable en vez de dejarlo crudo.
+ */
+test('el UNIQUE de movimiento_original_id sigue protegido a nivel de base de datos', function () {
+    $original = movimientoManual();
+    $otro = movimientoManual(['descripcion' => 'Otro movimiento manual', 'categoria' => 'otro']);
+
+    MovimientoFinanciero::create([
+        'tipo' => 'ingreso',
+        'categoria' => $original->categoria,
+        'monto' => $original->monto,
+        'descripcion' => 'Reversión de movimiento #'.$original->id,
+        'fecha' => today(),
+        'movimiento_original_id' => $original->id,
+        'motivo_reversion' => 'primera reversión',
+        'revertido_por_user_id' => admin()->id,
+    ]);
+
+    $actorId = admin()->id;
+    $codigo = null;
+
+    try {
+        MovimientoFinanciero::create([
+            'tipo' => 'ingreso',
+            'categoria' => $otro->categoria,
+            'monto' => $otro->monto,
+            'descripcion' => 'Reversión concurrente de movimiento #'.$original->id,
+            'fecha' => today(),
+            'movimiento_original_id' => $original->id,
+            'motivo_reversion' => 'reversión concurrente',
+            'revertido_por_user_id' => $actorId,
+        ]);
+    } catch (Illuminate\Database\QueryException $exception) {
+        $codigo = $exception->getCode();
+    }
+
+    expect($codigo)->toBe('23000');
+});
+
+test('la segunda reversión (ya revertido) redirige con mensaje amigable en vez de un error crudo', function () {
+    $admin = admin();
+    $original = movimientoManual();
+
+    app(RevertirMovimientoFinanciero::class)->ejecutar($original, 'primera reversion', $admin);
+
+    $this->actingAs($admin)
+        ->from(route('admin.movimientos-financieros.index'))
+        ->post(route('admin.movimientos-financieros.revertir', $original), ['motivo_reversion' => 'segunda reversion'])
+        ->assertRedirect(route('admin.movimientos-financieros.index'))
+        ->assertSessionHasErrors(['movimiento' => 'Este movimiento ya fue revertido.']);
+
+    $this->actingAs($admin)
+        ->followingRedirects()
+        ->post(route('admin.movimientos-financieros.revertir', $original), ['motivo_reversion' => 'tercera reversion'])
+        ->assertOk()
+        ->assertSee('Este movimiento ya fue revertido.')
+        ->assertDontSee('QueryException')
+        ->assertDontSee('SQLSTATE');
 });
 
 test('una reversion no puede volver a revertirse', function () {

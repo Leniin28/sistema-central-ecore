@@ -4,6 +4,7 @@ namespace App\Actions\Finanzas;
 
 use App\Models\MovimientoFinanciero;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -57,20 +58,35 @@ class RevertirMovimientoFinanciero
 
             $tipoOpuesto = $original->tipo === 'ingreso' ? 'egreso' : 'ingreso';
 
-            return MovimientoFinanciero::create([
-                'orden_servicio_id' => null,
-                'cotizacion_id' => null,
-                'cliente_id' => $original->cliente_id,
-                'partner_id' => $original->partner_id,
-                'tipo' => $tipoOpuesto,
-                'categoria' => $original->categoria,
-                'monto' => $original->monto,
-                'descripcion' => 'Reversión de movimiento #'.$original->id.' ('.$motivo.')',
-                'fecha' => today(),
-                'movimiento_original_id' => $original->id,
-                'motivo_reversion' => $motivo,
-                'revertido_por_user_id' => $actor->id,
-            ]);
+            try {
+                return MovimientoFinanciero::create([
+                    'orden_servicio_id' => null,
+                    'cotizacion_id' => null,
+                    'cliente_id' => $original->cliente_id,
+                    'partner_id' => $original->partner_id,
+                    'tipo' => $tipoOpuesto,
+                    'categoria' => $original->categoria,
+                    'monto' => $original->monto,
+                    'descripcion' => 'Reversión de movimiento #'.$original->id.' ('.$motivo.')',
+                    'fecha' => today(),
+                    'movimiento_original_id' => $original->id,
+                    'motivo_reversion' => $motivo,
+                    'revertido_por_user_id' => $actor->id,
+                ]);
+            } catch (QueryException $exception) {
+                // Defensa en profundidad detrás del lockForUpdate() de arriba:
+                // si dos reversiones del mismo movimiento llegan a chocar con el
+                // UNIQUE de movimiento_original_id, el segundo request recibe el
+                // mismo mensaje amigable en vez de una QueryException cruda. El
+                // UNIQUE y el lock no se debilitan -- esto sólo traduce el error.
+                if ($exception->getCode() === '23000') {
+                    throw ValidationException::withMessages([
+                        'movimiento' => 'Este movimiento ya fue revertido.',
+                    ]);
+                }
+
+                throw $exception;
+            }
         });
     }
 }

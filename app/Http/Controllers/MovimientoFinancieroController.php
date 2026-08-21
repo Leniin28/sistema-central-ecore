@@ -127,6 +127,9 @@ class MovimientoFinancieroController extends Controller
     {
         $data = $request->validate([
             'motivo_reversion' => ['required', 'string', 'max:1000'],
+        ], [
+            'motivo_reversion.required' => 'El motivo es obligatorio para registrar esta reversión.',
+            'motivo_reversion.max' => 'El motivo no puede superar los 1000 caracteres.',
         ]);
 
         $accion->ejecutar($movimientoFinanciero, $data['motivo_reversion'], $request->user());
