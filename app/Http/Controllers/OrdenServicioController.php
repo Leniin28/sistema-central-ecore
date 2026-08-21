@@ -77,6 +77,7 @@ class OrdenServicioController extends Controller
             'detalles.servicio.categoriaServicio',
             'refacciones' => fn ($query) => $query->orderBy('id'),
             'historialEstados.user',
+            'ajustesFinancieros' => fn ($query) => $query->with('actor')->latest('id'),
         ]);
 
         return view('ordenes-servicio.show', [

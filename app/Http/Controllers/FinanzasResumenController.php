@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AjusteFinancieroOrden;
 use App\Models\MovimientoFinanciero;
 use App\Models\OrdenServicio;
 use Carbon\CarbonImmutable;
@@ -45,6 +46,13 @@ class FinanzasResumenController extends Controller
         $ingresosTotal = (float) (clone $movimientosQuery)->where('tipo', 'ingreso')->sum('monto');
         $egresosTotal = (float) (clone $movimientosQuery)->where('tipo', 'egreso')->sum('monto');
         $balance = round($ingresosTotal - $egresosTotal, 2);
+        // Reembolsos del periodo (FASE H.3): ya incluidos en egresosTotal/balance
+        // como cualquier otro egreso; este total es sólo un resumen dedicado
+        // para no tener que leerlo del desglose por categoría.
+        $reembolsosTotal = (float) (clone $movimientosQuery)
+            ->where('tipo', 'egreso')
+            ->where('categoria', AjusteFinancieroOrden::TIPO_REEMBOLSO_CLIENTE)
+            ->sum('monto');
 
         $desglosePorCategoria = (clone $movimientosQuery)
             ->select('tipo', 'categoria', DB::raw('SUM(monto) as total'))
@@ -84,6 +92,7 @@ class FinanzasResumenController extends Controller
             'ingresosTotal' => $ingresosTotal,
             'egresosTotal' => $egresosTotal,
             'balance' => $balance,
+            'reembolsosTotal' => $reembolsosTotal,
             'desglosePorCategoria' => $desglosePorCategoria,
             'movimientos' => $movimientos,
             'ordenesEntregadasCount' => $ordenesEntregadasCount,

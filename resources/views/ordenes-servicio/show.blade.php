@@ -182,6 +182,8 @@
 
         @include('ordenes-servicio._refacciones')
 
+        @include('ordenes-servicio._ajustes-financieros')
+
         @include('ordenes-servicio._historial')
     </div>
 </x-layouts::app>

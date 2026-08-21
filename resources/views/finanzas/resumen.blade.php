@@ -48,7 +48,7 @@
             <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Flujo financiero</h2>
             <p class="text-sm text-neutral-600 dark:text-neutral-400">Dinero que realmente entró o salió en el periodo, por fecha de movimiento.</p>
 
-            <div class="grid gap-4 md:grid-cols-3">
+            <div class="grid gap-4 md:grid-cols-4">
                 <div class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
                     <h3 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Ingresos cobrados</h3>
                     <p class="mt-2 text-2xl font-semibold text-emerald-700 dark:text-emerald-300">${{ number_format($ingresosTotal, 2) }}</p>
@@ -61,6 +61,11 @@
                     <h3 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Balance</h3>
                     <p class="mt-2 text-2xl font-semibold text-neutral-900 dark:text-neutral-100">${{ number_format($balance, 2) }}</p>
                     <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Ingresos − egresos. No es utilidad.</p>
+                </div>
+                <div class="rounded-lg border border-neutral-200 p-5 dark:border-neutral-700">
+                    <h3 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Reembolsos del periodo</h3>
+                    <p class="mt-2 text-2xl font-semibold text-red-700 dark:text-red-300">${{ number_format($reembolsosTotal, 2) }}</p>
+                    <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Ya incluidos en egresos, por su propia fecha.</p>
                 </div>
             </div>
 

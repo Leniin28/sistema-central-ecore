@@ -9,6 +9,7 @@ use App\Http\Controllers\EquipoController;
 use App\Http\Controllers\FinanzasResumenController;
 use App\Http\Controllers\LogisticaDashboardController;
 use App\Http\Controllers\MovimientoFinancieroController;
+use App\Http\Controllers\OrdenServicioAjusteController;
 use App\Http\Controllers\OrdenServicioController;
 use App\Http\Controllers\OrdenServicioEstadoController;
 use App\Http\Controllers\RecepcionController;
@@ -45,6 +46,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('ordenes-servicio.estado.store');
         Route::patch('ordenes-servicio/{ordenServicio}/costos', [OrdenServicioController::class, 'actualizarCostos'])
             ->name('ordenes-servicio.costos.update');
+        Route::post('ordenes-servicio/{ordenServicio}/reembolso', [OrdenServicioAjusteController::class, 'reembolso'])
+            ->name('ordenes-servicio.reembolso.store');
         Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion', [OrdenServicioController::class, 'notaRecepcion'])
             ->name('ordenes-servicio.nota-recepcion');
         Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion/pdf', [OrdenServicioController::class, 'notaRecepcionPdf'])
