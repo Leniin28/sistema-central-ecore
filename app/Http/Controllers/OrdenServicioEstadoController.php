@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Ordenes\ValidarCostoTecnicoParaEntrega;
+use App\Actions\Ordenes\ValidarCotizacionAceptadaParaEntrega;
 use App\Exceptions\CostoTecnicoPendienteException;
+use App\Exceptions\CotizacionPendienteException;
 use App\Models\OrdenServicio;
 use App\Services\GenerarFinanzasOrdenServicio;
 use Illuminate\Http\RedirectResponse;
@@ -23,6 +25,7 @@ class OrdenServicioEstadoController extends Controller
         Request $request,
         OrdenServicio $ordenServicio,
         ValidarCostoTecnicoParaEntrega $validarCostoTecnico,
+        ValidarCotizacionAceptadaParaEntrega $validarCotizacionAceptada,
     ): RedirectResponse {
         $data = $request->validate([
             'estado_nuevo' => ['required', Rule::in(self::ESTADOS)],
@@ -30,7 +33,7 @@ class OrdenServicioEstadoController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($ordenServicio, $data, $validarCostoTecnico): void {
+            DB::transaction(function () use ($ordenServicio, $data, $validarCostoTecnico, $validarCotizacionAceptada): void {
                 $ordenServicio = OrdenServicio::query()->lockForUpdate()->findOrFail($ordenServicio->id);
                 $this->authorizeChange($ordenServicio);
                 abort_if($ordenServicio->orden_canonica_id !== null, 403);
@@ -39,6 +42,7 @@ class OrdenServicioEstadoController extends Controller
                 abort_unless(in_array($data['estado_nuevo'], $this->estadosDisponibles($ordenServicio), true), 403);
 
                 if ($data['estado_nuevo'] === 'entregado') {
+                    $validarCotizacionAceptada->ejecutar($ordenServicio);
                     $validarCostoTecnico->ejecutar($ordenServicio);
                 }
 
@@ -62,7 +66,7 @@ class OrdenServicioEstadoController extends Controller
                     app(GenerarFinanzasOrdenServicio::class)->generar($ordenServicio);
                 }
             });
-        } catch (CostoTecnicoPendienteException $exception) {
+        } catch (CostoTecnicoPendienteException|CotizacionPendienteException $exception) {
             return back()->withErrors(['estado_nuevo' => $exception->getMessage()]);
         }
 

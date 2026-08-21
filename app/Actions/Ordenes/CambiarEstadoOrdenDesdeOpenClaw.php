@@ -16,6 +16,10 @@ use Illuminate\Support\Facades\DB;
  * guard, status history entry, and — on `entregado` — the EXACT same
  * {@see GenerarFinanzasOrdenServicio} the panel uses (which is itself idempotent).
  *
+ * Como el panel, también bloquea la entrega si la orden tiene cotización
+ * vinculada y esa cotización todavía no está aceptada (ver
+ * {@see ValidarCotizacionAceptadaParaEntrega}).
+ *
  * Differences specific to the internal API:
  * - The actor is the OpenClaw system user (admin), so any transition is allowed,
  *   same as an admin in the panel.
@@ -31,6 +35,7 @@ class CambiarEstadoOrdenDesdeOpenClaw
         private ObtenerUsuarioSistema $usuarioSistema,
         private GenerarFinanzasOrdenServicio $finanzas,
         private ValidarCostoTecnicoParaEntrega $validarCostoTecnico,
+        private ValidarCotizacionAceptadaParaEntrega $validarCotizacionAceptada,
     ) {}
 
     /**
@@ -80,6 +85,7 @@ class CambiarEstadoOrdenDesdeOpenClaw
             }
 
             if ($estadoNuevo === 'entregado') {
+                $this->validarCotizacionAceptada->ejecutar($orden);
                 $this->validarCostoTecnico->ejecutar($orden);
             }
 

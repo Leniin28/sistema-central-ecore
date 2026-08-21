@@ -7,6 +7,7 @@ use App\Actions\Ordenes\AplicarCambiosOrdenDesdeOpenClaw;
 use App\Actions\Ordenes\CambiarEstadoOrdenDesdeOpenClaw;
 use App\Exceptions\ConfirmacionEntregaRequeridaException;
 use App\Exceptions\CostoTecnicoPendienteException;
+use App\Exceptions\CotizacionPendienteException;
 use App\Exceptions\OrdenBloqueadaException;
 use App\Http\Controllers\Controller;
 use App\Models\OrdenServicio;
@@ -246,7 +247,7 @@ class InternalServiceOrderController extends Controller
                 $data['external_id'] ?? null,
                 (bool) ($data['confirm_final_delivery'] ?? false),
             );
-        } catch (OrdenBloqueadaException|ConfirmacionEntregaRequeridaException|CostoTecnicoPendienteException $exception) {
+        } catch (OrdenBloqueadaException|ConfirmacionEntregaRequeridaException|CostoTecnicoPendienteException|CotizacionPendienteException $exception) {
             Log::warning('API interna: cambio de estado rechazado.', [
                 'orden_id' => $ordenServicio->id,
                 'folio' => $ordenServicio->folio,
