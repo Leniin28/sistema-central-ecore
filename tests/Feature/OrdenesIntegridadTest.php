@@ -16,6 +16,10 @@ use Illuminate\Validation\ValidationException;
 
 uses(RefreshDatabase::class);
 
+// Este archivo prueba integridad/idempotencia de finanzas, no resolución de
+// modelo financiero: fija legacy explícitamente para no depender del default global.
+beforeEach(fn () => config(['negocio.modelo_financiero_nuevas_ordenes' => 'legacy']));
+
 function datosOrden(): array
 {
     $logistica = Partner::create(['nombre' => 'Electrocom', 'tipo_socio' => 'logistico', 'comision_fija' => 50, 'activo' => true]);

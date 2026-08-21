@@ -14,6 +14,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+// Este archivo prueba la mecánica del endpoint de estado vía API, no
+// resolución de modelo financiero: fija legacy explícitamente para no
+// depender del default global.
+beforeEach(fn () => config(['negocio.modelo_financiero_nuevas_ordenes' => 'legacy']));
+
 function ordenParaCambios(string $passwordEquipo = '9999'): OrdenServicio
 {
     $cliente = Cliente::create(['nombre' => 'Román Barrera', 'telefono' => '4491112233', 'tipo_cliente' => 'mantenimiento']);

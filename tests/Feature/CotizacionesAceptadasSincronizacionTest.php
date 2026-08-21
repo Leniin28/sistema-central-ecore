@@ -10,6 +10,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+// Este archivo prueba sincronización de líneas, no resolución de modelo
+// financiero: fija legacy explícitamente para no depender del default global.
+beforeEach(fn () => config(['negocio.modelo_financiero_nuevas_ordenes' => 'legacy']));
+
 function contextoSincronizacionAceptada(): array
 {
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);

@@ -13,6 +13,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+// Este archivo prueba la mecánica de conversión de cotización a orden vía
+// API, no resolución de modelo financiero: fija legacy explícitamente para
+// no depender del default global.
+beforeEach(fn () => config(['negocio.modelo_financiero_nuevas_ordenes' => 'legacy']));
+
 test('conversion rejects a quote line already traced as the opposite order-line type', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
     $cotizacion = cotizacionParaConvertir([

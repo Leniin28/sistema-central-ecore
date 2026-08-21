@@ -11,6 +11,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+// Este archivo prueba agregados de reportes, no resolución de modelo
+// financiero: fija legacy explícitamente para no depender del default global.
+beforeEach(fn () => config(['negocio.modelo_financiero_nuevas_ordenes' => 'legacy']));
+
 function crearOrdenReporte(?Cliente $cliente = null): OrdenServicio
 {
     $cliente ??= Cliente::create(['nombre' => 'Cliente Reporte', 'telefono' => '4490001122', 'tipo_cliente' => 'mantenimiento']);

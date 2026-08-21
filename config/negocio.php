@@ -40,6 +40,6 @@ return [
     |
     */
 
-    'modelo_financiero_nuevas_ordenes' => env('ECORE_MODELO_FINANCIERO_NUEVAS_ORDENES', 'legacy'),
+    'modelo_financiero_nuevas_ordenes' => env('ECORE_MODELO_FINANCIERO_NUEVAS_ORDENES', 'costos_por_linea'),
 
 ];

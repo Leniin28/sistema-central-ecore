@@ -18,6 +18,10 @@ use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
 
+// Este archivo prueba la semántica legacy de costo_tecnico, no resolución de
+// modelo financiero: fija legacy explícitamente para no depender del default global.
+beforeEach(fn () => config(['negocio.modelo_financiero_nuevas_ordenes' => 'legacy']));
+
 function contextoCostoTecnico(): array
 {
     $logistica = Partner::create(['nombre' => 'Electrocom costos', 'tipo_socio' => 'logistico', 'comision_fija' => 50, 'activo' => true]);

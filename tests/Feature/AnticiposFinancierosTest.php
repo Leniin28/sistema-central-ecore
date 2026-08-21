@@ -17,6 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 uses(RefreshDatabase::class);
 
+// Este archivo prueba reconciliación de anticipos, no resolución de modelo
+// financiero: fija legacy explícitamente para no depender del default global.
+beforeEach(fn () => config(['negocio.modelo_financiero_nuevas_ordenes' => 'legacy']));
+
 function contextoAnticipos(): array
 {
     $cliente = Cliente::create([

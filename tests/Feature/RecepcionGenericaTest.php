@@ -15,6 +15,11 @@ use Illuminate\Validation\ValidationException;
 
 uses(RefreshDatabase::class);
 
+// Este archivo prueba la mecánica de captura/edición de la recepción legacy,
+// no resolución de modelo financiero: fija legacy explícitamente para no
+// depender del default global.
+beforeEach(fn () => config(['negocio.modelo_financiero_nuevas_ordenes' => 'legacy']));
+
 function contextoRecepcionGenerica(): array
 {
     $partnerA = Partner::create(['nombre' => 'Electrocom Alameda', 'tipo_socio' => 'logistico', 'comision_fija' => 50, 'activo' => true]);
