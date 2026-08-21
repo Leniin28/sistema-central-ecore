@@ -12,6 +12,10 @@
             </form>
         </section>
 
-        @include('ordenes-servicio._costos-form')
+        @if (! $orden->finanzas_generadas
+            && ! in_array($orden->estado, ['entregado', 'cancelado'], true)
+            && $orden->orden_canonica_id === null)
+            @include('ordenes-servicio._costos-form')
+        @endif
     </div>
 </x-layouts::app>

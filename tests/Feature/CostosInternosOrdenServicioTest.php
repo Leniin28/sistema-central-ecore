@@ -234,6 +234,10 @@ test('solo admin puede actualizar costos por action y por ruta', function () {
     ))->toThrow(HttpException::class);
 
     $this->actingAs($contexto['socio'])
+        ->get(route('admin.ordenes-servicio.edit', $contexto['orden']))
+        ->assertForbidden();
+
+    $this->actingAs($contexto['socio'])
         ->patch(route('admin.ordenes-servicio.costos.update', $contexto['orden']), [
             'costos_servicios' => [['id' => $contexto['servicioCotizado']->id, 'costo_unitario' => 0]],
             'costos_refacciones' => [],
@@ -264,6 +268,71 @@ test('bloquea costos en orden cerrada cancelada o consolidada', function (string
     'entregada' => ['entregada'],
     'cancelada' => ['cancelada'],
     'consolidada' => ['consolidada'],
+]);
+
+test('una orden cancelada no muestra el formulario de costos internos al editar', function () {
+    $contexto = contextoCostosInternos();
+    $contexto['orden']->update([
+        'cotizacion_id' => null,
+        'estado' => 'cancelado',
+    ]);
+
+    $this->actingAs($contexto['admin'])
+        ->get(route('admin.ordenes-servicio.edit', $contexto['orden']))
+        ->assertOk()
+        ->assertDontSee('Guardar costos internos');
+});
+
+test('una orden consolidada no muestra el formulario de costos internos al editar', function () {
+    $contexto = contextoCostosInternos();
+    $canonica = $contexto['orden']->replicate(['folio', 'cotizacion_id']);
+    $canonica->folio = 'OS-COSTOS-CANONICA';
+    $canonica->cotizacion_id = null;
+    $canonica->save();
+    $contexto['orden']->update(['orden_canonica_id' => $canonica->id]);
+
+    $this->actingAs($contexto['admin'])
+        ->get(route('admin.ordenes-servicio.edit', $contexto['orden']))
+        ->assertOk()
+        ->assertDontSee('Guardar costos internos');
+});
+
+test('una orden entregada no muestra el formulario de costos internos al intentar editar', function () {
+    $contexto = contextoCostosInternos();
+    $contexto['orden']->update(['estado' => 'entregado']);
+
+    $this->actingAs($contexto['admin'])
+        ->get(route('admin.ordenes-servicio.edit', $contexto['orden']))
+        ->assertRedirect(route('admin.ordenes-servicio.show', $contexto['orden']))
+        ->assertDontSee('Guardar costos internos');
+});
+
+test('una orden con finanzas generadas no muestra el formulario de costos internos al intentar editar', function () {
+    $contexto = contextoCostosInternos();
+    $contexto['orden']->update(['finanzas_generadas' => true]);
+
+    $this->actingAs($contexto['admin'])
+        ->get(route('admin.ordenes-servicio.edit', $contexto['orden']))
+        ->assertRedirect(route('admin.ordenes-servicio.show', $contexto['orden']))
+        ->assertDontSee('Guardar costos internos');
+});
+
+test('admin ve el formulario de costos internos en los estados abiertos', function (string $estado) {
+    $contexto = contextoCostosInternos();
+    $contexto['orden']->update(['estado' => $estado]);
+
+    $this->actingAs($contexto['admin'])
+        ->get(route('admin.ordenes-servicio.edit', $contexto['orden']))
+        ->assertOk()
+        ->assertSee('Guardar costos internos');
+})->with([
+    'recibido',
+    'en_diagnostico',
+    'cotizacion_pendiente',
+    'cotizacion_aprobada',
+    'en_proceso',
+    'en_fixop',
+    'listo_para_entregar',
 ]);
 
 test('la interfaz separa costo pendiente de cero y la ruta solo acepta costos', function () {
