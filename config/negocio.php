@@ -27,4 +27,19 @@ return [
         'Precios en MXN. Esta cotización no es un comprobante fiscal.',
     ),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Modelo financiero para órdenes nuevas
+    |--------------------------------------------------------------------------
+    |
+    | Decide, exclusivamente en el servidor, qué modelo_financiero recibe toda
+    | orden NUEVA (recepción web, creación directa, cotización -> orden nueva,
+    | OpenClaw). Ningún request puede elegirlo. Valores válidos: "legacy" o
+    | "costos_por_linea". Una orden ya existente conserva siempre el modelo
+    | con el que nació, sin importar este valor.
+    |
+    */
+
+    'modelo_financiero_nuevas_ordenes' => env('ECORE_MODELO_FINANCIERO_NUEVAS_ORDENES', 'legacy'),
+
 ];

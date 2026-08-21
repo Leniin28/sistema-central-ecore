@@ -12,7 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class CrearOrdenServicio
 {
-    public function __construct(private CalcularTotalesOrdenServicio $calculadora) {}
+    public function __construct(
+        private CalcularTotalesOrdenServicio $calculadora,
+        private ResolverModeloFinancieroNuevaOrden $resolverModelo,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -22,6 +25,12 @@ class CrearOrdenServicio
     public function ejecutar(array $data, array $detalles, array $refacciones, User $actor): OrdenServicio
     {
         return DB::transaction(function () use ($data, $detalles, $refacciones, $actor): OrdenServicio {
+            // Ningún canal (web, API, OpenClaw, cotizaciones) puede elegir el
+            // modelo financiero: se descarta cualquier valor entrante y se
+            // resuelve exclusivamente desde config server-side.
+            unset($data['modelo_financiero']);
+            $modeloFinanciero = $this->resolverModelo->ejecutar();
+
             $data = $this->prepararAsignaciones($data, $actor);
             if (! $actor->isAdmin()) {
                 $data['costo_tecnico'] = null;
@@ -38,7 +47,7 @@ class CrearOrdenServicio
                 'total_cliente' => 0,
                 'costo_tecnico' => $data['costo_tecnico'] ?? null,
                 'comision_logistica' => 0,
-                'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_LEGACY,
+                'modelo_financiero' => $modeloFinanciero,
                 'utilidad_estimada' => 0,
                 'costos_incompletos' => false,
                 'utilidad_neta' => 0,
@@ -68,6 +77,8 @@ class CrearOrdenServicio
                 $refacciones,
                 isset($data['costo_tecnico']) ? (float) $data['costo_tecnico'] : null,
                 tienePartnerTecnico: ! empty($data['partner_tecnico_id']),
+                modeloFinanciero: $modeloFinanciero,
+                comisionRecepcion: isset($data['comision_recepcion']) ? (float) $data['comision_recepcion'] : null,
             );
             $orden->update([
                 'total_cliente' => $resumen['total_cliente'],
