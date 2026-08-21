@@ -7,6 +7,7 @@ use App\Models\Equipo;
 use App\Models\MovimientoFinanciero;
 use App\Models\OrdenServicio;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 
@@ -190,7 +191,7 @@ test('el UNIQUE de movimiento_original_id sigue protegido a nivel de base de dat
             'motivo_reversion' => 'reversión concurrente',
             'revertido_por_user_id' => $actorId,
         ]);
-    } catch (Illuminate\Database\QueryException $exception) {
+    } catch (QueryException $exception) {
         $codigo = $exception->getCode();
     }
 
@@ -402,4 +403,3 @@ test('cero escrituras si el guard de estructurado falla', function () {
     expect(MovimientoFinanciero::count())->toBe(1)
         ->and(MovimientoFinanciero::whereNotNull('movimiento_original_id')->count())->toBe(0);
 });
-
