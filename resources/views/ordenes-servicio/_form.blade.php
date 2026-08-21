@@ -135,7 +135,11 @@
         <div>
             <label for="comision_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Comisión de recepción</label>
             <input id="comision_recepcion" name="comision_recepcion" type="number" min="0" max="99999999.99" step="0.01" value="{{ old('comision_recepcion', $orden->comision_recepcion) }}" class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
-            <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Vacío significa pendiente. En esta fase el dato no participa en las finanzas legacy.</p>
+            @if ($orden->exists && $orden->usaCostosPorLinea())
+                <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Vacío significa pendiente: es un requisito financiero real para poder entregar esta orden.</p>
+            @else
+                <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Vacío significa pendiente. Dato preparado; no es un costo activo de una orden legacy.</p>
+            @endif
             @error('comision_recepcion')
                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
             @enderror
@@ -187,7 +191,7 @@
         @enderror
     </div>
 
-    @if (auth()->user()->isAdmin() && $orden->exists)
+    @if (auth()->user()->isAdmin() && $orden->exists && $orden->usaModeloFinancieroLegacy())
         <div>
             <label for="costo_tecnico" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Costo técnico</label>
 

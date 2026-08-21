@@ -30,8 +30,18 @@ class StoreRecepcionRequest extends FormRequest
             }
         }
 
+        $esAdmin = (bool) $this->user()?->isAdmin();
+        $normalizarCosto = function (array $row) use ($esAdmin): array {
+            if ($esAdmin && array_key_exists('costo_unitario', $row) && $row['costo_unitario'] === '') {
+                $row['costo_unitario'] = null;
+            }
+
+            return $row;
+        };
+
         $servicios = collect($this->input('servicios', []))
             ->filter(fn ($row): bool => is_array($row) && filled($row['servicio_id'] ?? null))
+            ->map($normalizarCosto)
             ->values()
             ->all();
         $refacciones = collect($this->input('refacciones', []))
@@ -41,6 +51,7 @@ class StoreRecepcionRequest extends FormRequest
                 || filled($row['precio_unitario_cliente'] ?? null)
                 || filled($row['notas'] ?? null)
             ))
+            ->map($normalizarCosto)
             ->values()
             ->all();
 
@@ -83,12 +94,17 @@ class StoreRecepcionRequest extends FormRequest
             'servicios.*.servicio_id' => ['required', 'exists:servicios,id'],
             'servicios.*.cantidad' => ['required', 'integer', 'min:1'],
             'servicios.*.precio_unitario' => ['required', 'numeric', 'min:0'],
+            'servicios.*.costo_unitario' => $this->user()?->isAdmin()
+                ? ['nullable', 'numeric', 'min:0']
+                : ['prohibited'],
             'servicios.*.notas' => ['nullable', 'string', 'max:1000'],
 
             'refacciones' => ['array'],
             'refacciones.*.descripcion' => ['required', 'string', 'max:255'],
             'refacciones.*.cantidad' => ['required', 'integer', 'min:1'],
-            'refacciones.*.costo_unitario' => ['required', 'numeric', 'min:0'],
+            'refacciones.*.costo_unitario' => $this->user()?->isAdmin()
+                ? ['nullable', 'numeric', 'min:0']
+                : ['prohibited'],
             'refacciones.*.precio_unitario_cliente' => ['required', 'numeric', 'min:0'],
             'refacciones.*.notas' => ['nullable', 'string', 'max:1000'],
         ];

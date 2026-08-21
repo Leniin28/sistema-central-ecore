@@ -104,7 +104,13 @@
                     <div>
                         <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Comisión de recepción</dt>
                         <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">{{ $orden->comision_recepcion === null ? 'Pendiente' : '$'.number_format($orden->comision_recepcion, 2) }}</dd>
-                        <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Dato preparado; todavía no participa en las finanzas legacy.</p>
+                        @if ($orden->usaCostosPorLinea())
+                            <p class="mt-1 text-xs {{ $orden->comision_recepcion === null ? 'text-amber-700 dark:text-amber-300' : 'text-neutral-500 dark:text-neutral-400' }}">
+                                {{ $orden->comision_recepcion === null ? 'Pendiente: requisito financiero real para poder entregar esta orden.' : 'Costo activo de esta orden.' }}
+                            </p>
+                        @else
+                            <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Dato preparado; no es un costo activo de esta orden legacy.</p>
+                        @endif
                     </div>
 
                     @if ($orden->nota_recepcion)
@@ -130,12 +136,14 @@
                     <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">${{ number_format($orden->total_cliente, 2) }}</dd>
                 </div>
 
-                <div>
-                    <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Costo técnico</dt>
-                    <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">
-                        {{ $orden->costo_tecnico === null ? 'Pendiente' : '$'.number_format($orden->costo_tecnico, 2) }}
-                    </dd>
-                </div>
+                @if ($orden->usaModeloFinancieroLegacy())
+                    <div>
+                        <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Costo técnico</dt>
+                        <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">
+                            {{ $orden->costo_tecnico === null ? 'Pendiente' : '$'.number_format($orden->costo_tecnico, 2) }}
+                        </dd>
+                    </div>
+                @endif
 
                 <div>
                     <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Comisión logística</dt>
@@ -151,6 +159,13 @@
                     <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Finanzas generadas</dt>
                     <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">{{ $orden->finanzas_generadas ? 'Sí' : 'No' }}</dd>
                 </div>
+
+                @if (auth()->user()->isAdmin())
+                    <div>
+                        <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Modelo financiero</dt>
+                        <dd class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{{ $orden->usaCostosPorLinea() ? 'Costos por línea' : 'Legacy' }}</dd>
+                    </div>
+                @endif
 
                 <div class="sm:col-span-2">
                     <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Notas</dt>

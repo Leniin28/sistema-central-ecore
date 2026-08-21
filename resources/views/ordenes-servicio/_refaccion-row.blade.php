@@ -54,24 +54,26 @@
             @endunless
         </div>
 
-        <div class="md:col-span-1 xl:col-span-2">
-            <label for="refacciones_{{ $index }}_costo_unitario" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Costo interno unitario</label>
-            <input
-                id="refacciones_{{ $index }}_costo_unitario"
-                name="refacciones[{{ $index }}][costo_unitario]"
-                type="number"
-                min="0"
-                step="0.01"
-                value="{{ $row['costo_unitario'] ?? '' }}"
-                class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm disabled:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:disabled:bg-neutral-900 dark:disabled:text-neutral-300"
-                @disabled($refaccionesReadonly)
-            >
-            @unless ($isTemplate)
-                @error("refacciones.$index.costo_unitario")
-                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                @enderror
-            @endunless
-        </div>
+        @if (auth()->user()->isAdmin())
+            <div class="md:col-span-1 xl:col-span-2">
+                <label for="refacciones_{{ $index }}_costo_unitario" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Costo interno unitario</label>
+                <input
+                    id="refacciones_{{ $index }}_costo_unitario"
+                    name="refacciones[{{ $index }}][costo_unitario]"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value="{{ $row['costo_unitario'] ?? '' }}"
+                    class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm disabled:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:disabled:bg-neutral-900 dark:disabled:text-neutral-300"
+                    @disabled($refaccionesReadonly)
+                >
+                @unless ($isTemplate)
+                    @error("refacciones.$index.costo_unitario")
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                @endunless
+            </div>
+        @endif
 
         <div class="md:col-span-1 xl:col-span-2">
             <label for="refacciones_{{ $index }}_precio_unitario_cliente" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Precio unitario al cliente</label>

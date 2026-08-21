@@ -265,7 +265,7 @@ test('detalle interno muestra el snapshot al admin sin exponerlo al socio', func
         ->assertSee('Comisión de recepción')
         ->assertSee('$0.00')
         ->assertSee('REFERENCIA-INTERNA-SHOW')
-        ->assertSee('todavía no participa en las finanzas legacy');
+        ->assertSee('no es un costo activo de esta orden legacy');
 
     $this->actingAs($contexto['logistico'])
         ->get(route('logistica.ordenes-servicio.show', $orden))

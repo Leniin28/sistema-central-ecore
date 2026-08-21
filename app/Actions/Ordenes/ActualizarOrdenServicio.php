@@ -57,7 +57,11 @@ class ActualizarOrdenServicio
             $this->validarAsignaciones($data);
             $detalles = $this->normalizarDetalles($detalles);
 
-            if ((int) ($orden->partner_tecnico_id ?? 0) !== (int) ($data['partner_tecnico_id'] ?? 0)) {
+            if ($orden->usaCostosPorLinea()) {
+                // costo_tecnico no participa financieramente ni se captura en el
+                // formulario para costos_por_linea: no lo toques al guardar.
+                unset($data['costo_tecnico']);
+            } elseif ((int) ($orden->partner_tecnico_id ?? 0) !== (int) ($data['partner_tecnico_id'] ?? 0)) {
                 $data['costo_tecnico'] = null;
             }
 

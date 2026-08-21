@@ -152,10 +152,13 @@
                     @error('servicios') <p class="mt-3 text-sm text-red-600">{{ $message }}</p> @enderror
                     <div class="mt-4 divide-y divide-neutral-200 border-y border-neutral-200 dark:divide-neutral-700 dark:border-neutral-700">
                         @foreach ($servicioRows as $index => $row)
-                            <div class="grid gap-3 py-4 md:grid-cols-[minmax(12rem,2fr)_6rem_8rem_minmax(10rem,1fr)]" data-service-row>
+                            <div class="grid gap-3 py-4 md:grid-cols-[minmax(12rem,2fr)_6rem_8rem_8rem_minmax(10rem,1fr)]" data-service-row>
                                 <div><label class="block text-xs font-medium text-neutral-500">Servicio {{ $index + 1 }}</label><select name="servicios[{{ $index }}][servicio_id]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-service-select><option value="">Sin servicio</option>@foreach ($servicios as $servicio)<option value="{{ $servicio->id }}" data-price="{{ $servicio->precio_base }}" @selected((int) ($row['servicio_id'] ?? 0) === $servicio->id)>{{ $servicio->nombre }} · ${{ number_format($servicio->precio_base, 2) }}</option>@endforeach</select></div>
                                 <div><label class="block text-xs font-medium text-neutral-500">Cantidad</label><input type="number" min="1" name="servicios[{{ $index }}][cantidad]" value="{{ $row['cantidad'] ?? 1 }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-quantity></div>
                                 <div><label class="block text-xs font-medium text-neutral-500">Precio</label><input type="number" min="0" step="0.01" name="servicios[{{ $index }}][precio_unitario]" value="{{ $row['precio_unitario'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-service-price></div>
+                                @if (auth()->user()->isAdmin())
+                                    <div><label class="block text-xs font-medium text-neutral-500">Costo interno</label><input type="number" min="0" step="0.01" name="servicios[{{ $index }}][costo_unitario]" value="{{ $row['costo_unitario'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-service-cost placeholder="Pendiente"></div>
+                                @endif
                                 <div><label class="block text-xs font-medium text-neutral-500">Notas</label><input name="servicios[{{ $index }}][notas]" value="{{ $row['notas'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"></div>
                             </div>
                         @endforeach
@@ -169,7 +172,9 @@
                             <div class="grid gap-3 py-4 md:grid-cols-[minmax(11rem,2fr)_5rem_8rem_8rem_minmax(9rem,1fr)]" data-part-row>
                                 <div><label class="block text-xs font-medium text-neutral-500">Descripción {{ $index + 1 }}</label><input name="refacciones[{{ $index }}][descripcion]" value="{{ $row['descripcion'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-part-description></div>
                                 <div><label class="block text-xs font-medium text-neutral-500">Cantidad</label><input type="number" min="1" name="refacciones[{{ $index }}][cantidad]" value="{{ $row['cantidad'] ?? 1 }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-quantity></div>
-                                <div><label class="block text-xs font-medium text-neutral-500">Costo</label><input type="number" min="0" step="0.01" name="refacciones[{{ $index }}][costo_unitario]" value="{{ $row['costo_unitario'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-part-cost></div>
+                                @if (auth()->user()->isAdmin())
+                                    <div><label class="block text-xs font-medium text-neutral-500">Costo</label><input type="number" min="0" step="0.01" name="refacciones[{{ $index }}][costo_unitario]" value="{{ $row['costo_unitario'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-part-cost placeholder="Pendiente"></div>
+                                @endif
                                 <div><label class="block text-xs font-medium text-neutral-500">Precio cliente</label><input type="number" min="0" step="0.01" name="refacciones[{{ $index }}][precio_unitario_cliente]" value="{{ $row['precio_unitario_cliente'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" data-part-price></div>
                                 <div><label class="block text-xs font-medium text-neutral-500">Notas</label><input name="refacciones[{{ $index }}][notas]" value="{{ $row['notas'] ?? '' }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"></div>
                             </div>
@@ -191,7 +196,7 @@
                         <div class="flex justify-between gap-4 border-t border-neutral-300 pt-3 dark:border-neutral-700"><dt class="font-semibold">Total al cliente</dt><dd id="summary-total" class="text-lg font-semibold">$0.00</dd></div>
                         <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Utilidad estimada</dt><dd id="summary-profit" class="font-semibold text-emerald-700 dark:text-emerald-300">$0.00</dd></div>
                     </dl>
-                    <p class="mt-4 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Estimación previa. La comisión de recepción queda registrada, pero todavía no participa en las finanzas legacy.</p>
+                    <p class="mt-4 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Estimación previa. Los importes finales se calculan en el servidor según el modelo financiero de la orden.</p>
                     <button type="submit" class="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-500 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200">Guardar recepción</button>
                 </div>
             </aside>
@@ -228,7 +233,7 @@
                 form.querySelectorAll('[data-part-row]').forEach(row => {
                     if (!row.querySelector('[data-part-description]').value.trim()) return;
                     const quantity = Number(row.querySelector('[data-quantity]').value) || 0;
-                    costs += quantity * (Number(row.querySelector('[data-part-cost]').value) || 0);
+                    costs += quantity * (Number(row.querySelector('[data-part-cost]')?.value) || 0);
                     parts += quantity * (Number(row.querySelector('[data-part-price]').value) || 0);
                 });
                 const commission = Number(commissionInput?.value || 0);
