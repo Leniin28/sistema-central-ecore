@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use InvalidArgumentException;
 
 #[Fillable([
     'folio',
@@ -24,6 +25,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'total_cliente',
     'costo_tecnico',
     'comision_logistica',
+    'comision_recepcion',
+    'nota_recepcion',
+    'modelo_financiero',
     'utilidad_estimada',
     'costos_incompletos',
     'utilidad_neta',
@@ -34,7 +38,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class OrdenServicio extends Model
 {
+    public const MODELO_FINANCIERO_LEGACY = 'legacy';
+
+    public const MODELO_FINANCIERO_COSTOS_POR_LINEA = 'costos_por_linea';
+
     protected $table = 'ordenes_servicio';
+
+    protected $attributes = [
+        'modelo_financiero' => self::MODELO_FINANCIERO_LEGACY,
+    ];
 
     /** Valid order statuses, in workflow order. */
     public const ESTADOS = [
@@ -85,6 +97,7 @@ class OrdenServicio extends Model
             'total_cliente' => 'decimal:2',
             'costo_tecnico' => 'decimal:2',
             'comision_logistica' => 'decimal:2',
+            'comision_recepcion' => 'decimal:2',
             'utilidad_estimada' => 'decimal:2',
             'costos_incompletos' => 'boolean',
             'utilidad_neta' => 'decimal:2',
@@ -92,6 +105,28 @@ class OrdenServicio extends Model
             'fecha_entrega' => 'datetime',
             'finanzas_generadas' => 'boolean',
         ];
+    }
+
+    public function usaModeloFinancieroLegacy(): bool
+    {
+        return $this->modelo_financiero === self::MODELO_FINANCIERO_LEGACY;
+    }
+
+    public function usaCostosPorLinea(): bool
+    {
+        return $this->modelo_financiero === self::MODELO_FINANCIERO_COSTOS_POR_LINEA;
+    }
+
+    public function setModeloFinancieroAttribute(string $modelo): void
+    {
+        if (! in_array($modelo, [
+            self::MODELO_FINANCIERO_LEGACY,
+            self::MODELO_FINANCIERO_COSTOS_POR_LINEA,
+        ], true)) {
+            throw new InvalidArgumentException("Modelo financiero no válido: {$modelo}.");
+        }
+
+        $this->attributes['modelo_financiero'] = $modelo;
     }
 
     /**
