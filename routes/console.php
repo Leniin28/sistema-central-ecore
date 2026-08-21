@@ -63,7 +63,7 @@ Artisan::command(
             .config('historical_quote_reconciliation.cutoff.commit').' @ '
             .config('historical_quote_reconciliation.cutoff.committed_at'));
         $this->table(
-            ['Caso', 'Estado', 'Cotización canónica', 'Orden canónica', 'Servicios provisionales', 'Refacciones manuales', 'Total cotización', 'Total orden'],
+            ['Caso', 'Estado', 'Cotización canónica', 'Orden canónica', 'Servicios provisionales', 'Refacciones preservadas', 'Deduplicaciones explícitas', 'Total cotización', 'Total orden'],
             $planes->map(fn (array $plan): array => [
                 $plan['key'],
                 $plan['status'],
@@ -71,6 +71,7 @@ Artisan::command(
                 $plan['canonical_order'],
                 $plan['provisional_services_to_delete'],
                 $plan['manual_refactions_preserved'],
+                $plan['manual_refactions_to_deduplicate'],
                 $plan['projected_quote_total'] === null ? '-' : number_format((float) $plan['projected_quote_total'], 2, '.', ''),
                 $plan['projected_order_total'] === null ? '-' : number_format((float) $plan['projected_order_total'], 2, '.', ''),
             ])->all(),
@@ -83,6 +84,15 @@ Artisan::command(
             $this->line('  Órdenes origen: '.(implode(', ', $plan['source_orders']) ?: 'ninguna'));
             foreach ($plan['reasons'] as $reason) {
                 $this->line('  - '.$reason);
+            }
+            foreach ($plan['manual_refaction_deduplications'] as $deduplicacion) {
+                $this->line(
+                    '  Deduplicación explícita: refacción manual #'.$deduplicacion['manual_refaction_id']
+                    .' -> item #'.$deduplicacion['deduplicated_into_cotizacion_item_id']
+                    .' ('.$deduplicacion['description'].', costo confirmado '
+                    .number_format((float) $deduplicacion['confirmed_unit_cost'], 2, '.', '').', motivo '
+                    .$deduplicacion['reason'].').',
+                );
             }
             if ($plan['fingerprint'] !== null) {
                 $this->line('  Huella: '.$plan['fingerprint']);

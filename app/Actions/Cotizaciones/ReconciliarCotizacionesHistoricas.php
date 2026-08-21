@@ -3,6 +3,7 @@
 namespace App\Actions\Cotizaciones;
 
 use App\Models\Cotizacion;
+use App\Models\CotizacionItem;
 use App\Models\OrdenServicio;
 use App\Models\OrdenServicioDetalle;
 use App\Models\OrdenServicioRefaccion;
@@ -115,6 +116,12 @@ class ReconciliarCotizacionesHistoricas
             $ordenesParticipantes = $plan['models']['all_orders'];
             $snapshotAntes = $plan['snapshot'];
 
+            $this->aplicarDeduplicacionesRefacciones(
+                $plan['manual_refaction_deduplications'],
+                $cotizacionCanonica,
+                $ordenCanonica,
+            );
+
             foreach ($ordenesParticipantes as $orden) {
                 if ($this->esAnteriorAlCutoff($orden)) {
                     $orden->detalles()->whereNull('cotizacion_item_id')->delete();
@@ -161,7 +168,10 @@ class ReconciliarCotizacionesHistoricas
             }
 
             $modelosDespues = $this->cargarModelos($definicion, lock: false);
-            $snapshotDespues = $this->capturarSnapshot($modelosDespues);
+            $snapshotDespues = $this->capturarSnapshot(
+                $modelosDespues,
+                $plan['manual_refaction_deduplications'],
+            );
             $auditoria = ReconciliacionCotizacionOrden::create([
                 'case_key' => $caseKey,
                 'fingerprint' => $fingerprint,
@@ -202,6 +212,8 @@ class ReconciliarCotizacionesHistoricas
                     'source_orders' => $aplicada->ordenes_origen_ids,
                     'provisional_services_to_delete' => 0,
                     'manual_refactions_preserved' => 0,
+                    'manual_refactions_to_deduplicate' => 0,
+                    'manual_refaction_deduplications' => [],
                     'projected_quote_total' => null,
                     'projected_order_total' => null,
                 ];
@@ -221,6 +233,8 @@ class ReconciliarCotizacionesHistoricas
                 'source_orders' => $definicion['source_orders'],
                 'provisional_services_to_delete' => 0,
                 'manual_refactions_preserved' => 0,
+                'manual_refactions_to_deduplicate' => 0,
+                'manual_refaction_deduplications' => [],
                 'projected_quote_total' => null,
                 'projected_order_total' => null,
             ];
@@ -285,9 +299,16 @@ class ReconciliarCotizacionesHistoricas
         }
 
         $refaccionesManuales = $ordenCanonica->refacciones->whereNull('cotizacion_item_id');
-        if ($refaccionesManuales->isNotEmpty()) {
+        $deduplicaciones = $this->resolverDeduplicacionesRefacciones($definicion, $modelos);
+        foreach ($deduplicaciones['reasons'] as $razon) {
             $status = 'blocked';
-            $razones[] = 'La orden canónica tiene refacciones manuales; no se eliminan ni asocian automáticamente.';
+            $razones[] = $razon;
+        }
+        $idsRefaccionesAutorizadas = collect($deduplicaciones['authorized'])->pluck('manual_refaction_id');
+        $refaccionesManualesPreservadas = $refaccionesManuales->whereNotIn('id', $idsRefaccionesAutorizadas);
+        if ($refaccionesManualesPreservadas->isNotEmpty()) {
+            $status = 'blocked';
+            $razones[] = 'La orden canónica tiene refacciones manuales sin autorización explícita; no se eliminan ni asocian automáticamente.';
         }
 
         $itemIds = $cotizaciones->flatMap->items->pluck('id');
@@ -324,10 +345,10 @@ class ReconciliarCotizacionesHistoricas
         $totalOrdenProyectado = round(
             (float) $subtotalCotizaciones
             + (float) $serviciosManualesPreservados
-            + (float) $refaccionesManuales->sum('precio_total_cliente'),
+            + (float) $refaccionesManualesPreservadas->sum('precio_total_cliente'),
             2,
         );
-        $snapshot = $this->capturarSnapshot($modelos);
+        $snapshot = $this->capturarSnapshot($modelos, $deduplicaciones['authorized']);
         $fingerprint = hash('sha256', json_encode([
             'version' => 1,
             'cutoff' => config('historical_quote_reconciliation.cutoff'),
@@ -349,7 +370,9 @@ class ReconciliarCotizacionesHistoricas
             'source_quotes' => $cotizacionesOrigen->pluck('folio')->all(),
             'source_orders' => $modelos['source_orders']->pluck('folio')->all(),
             'provisional_services_to_delete' => $serviciosProvisionales,
-            'manual_refactions_preserved' => $refaccionesManuales->count(),
+            'manual_refactions_preserved' => $refaccionesManualesPreservadas->count(),
+            'manual_refactions_to_deduplicate' => count($deduplicaciones['authorized']),
+            'manual_refaction_deduplications' => $deduplicaciones['authorized'],
             'projected_quote_total' => $resumenCotizacion['total'],
             'projected_order_total' => $totalOrdenProyectado,
             'snapshot' => $snapshot,
@@ -377,6 +400,18 @@ class ReconciliarCotizacionesHistoricas
 
         $cotizaciones = $cotizacionesQuery->get()->keyBy('folio');
         $ordenes = $ordenesQuery->get()->keyBy('folio');
+
+        if ($lock) {
+            foreach ($cotizaciones as $cotizacion) {
+                $cotizacion->setRelation('items', $cotizacion->items()->orderBy('id')->lockForUpdate()->get());
+            }
+            foreach ($ordenes as $orden) {
+                $orden->setRelation('detalles', $orden->detalles()->orderBy('id')->lockForUpdate()->get());
+                $orden->setRelation('refacciones', $orden->refacciones()->orderBy('id')->lockForUpdate()->get());
+                $orden->setRelation('movimientosFinancieros', $orden->movimientosFinancieros()->orderBy('id')->lockForUpdate()->get());
+            }
+        }
+
         $faltantes = $cotizacionFolios->reject(fn (string $folio): bool => $cotizaciones->has($folio))
             ->merge($ordenFolios->reject(fn (string $folio): bool => $ordenes->has($folio)))
             ->values()
@@ -397,10 +432,14 @@ class ReconciliarCotizacionesHistoricas
         ];
     }
 
-    /** @param array<string, mixed> $modelos */
-    private function capturarSnapshot(array $modelos): array
+    /**
+     * @param  array<string, mixed>  $modelos
+     * @param  array<int, array<string, mixed>>  $deduplicaciones
+     */
+    private function capturarSnapshot(array $modelos, array $deduplicaciones = []): array
     {
         return [
+            'manual_refaction_deduplications' => $deduplicaciones,
             'quotes' => $modelos['all_quotes']->sortBy('id')->map(fn (Cotizacion $cotizacion): array => [
                 'id' => $cotizacion->id,
                 'folio' => $cotizacion->folio,
@@ -422,6 +461,7 @@ class ReconciliarCotizacionesHistoricas
                     'cantidad' => $item->cantidad,
                     'precio_unitario' => $item->precio_unitario,
                     'costo_unitario' => $item->costo_unitario,
+                    'costo_total' => $item->costo_total,
                     'subtotal' => $item->subtotal,
                     'updated_at' => $item->updated_at?->toJSON(),
                 ])->values()->all(),
@@ -460,11 +500,169 @@ class ReconciliarCotizacionesHistoricas
                     'cantidad' => $refaccion->cantidad,
                     'precio_unitario' => $refaccion->precio_unitario_cliente,
                     'costo_unitario' => $refaccion->costo_unitario,
+                    'costo_total' => $refaccion->costo_total,
                     'subtotal' => $refaccion->precio_total_cliente,
+                    'notas' => $refaccion->notas,
+                    'created_at' => $refaccion->created_at?->toJSON(),
                     'updated_at' => $refaccion->updated_at?->toJSON(),
                 ])->values()->all(),
             ])->values()->all(),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $definicion
+     * @param  array<string, mixed>  $modelos
+     * @return array{authorized: array<int, array<string, mixed>>, reasons: array<int, string>}
+     */
+    private function resolverDeduplicacionesRefacciones(array $definicion, array $modelos): array
+    {
+        $reglas = $definicion['manual_refaction_deduplications'] ?? [];
+        if (! is_array($reglas)) {
+            return [
+                'authorized' => [],
+                'reasons' => ['La configuración de deduplicaciones de refacciones no es válida.'],
+            ];
+        }
+
+        /** @var Cotizacion $cotizacion */
+        $cotizacion = $modelos['canonical_quote'];
+        /** @var OrdenServicio $orden */
+        $orden = $modelos['canonical_order'];
+        $autorizadas = [];
+        $razones = [];
+        $idsRefacciones = [];
+        $idsItems = [];
+        $campos = [
+            'canonical_order_id', 'canonical_order_folio', 'manual_refaction_id',
+            'canonical_quote_id', 'canonical_quote_folio', 'cotizacion_item_id',
+            'type', 'description', 'normalized_description', 'quantity', 'unit_price',
+            'manual_unit_cost', 'manual_total_cost', 'expected_item_unit_cost',
+            'expected_item_total_cost', 'confirmed_unit_cost', 'reason',
+        ];
+
+        foreach ($reglas as $indice => $regla) {
+            if (! is_array($regla) || collect($campos)->contains(fn (string $campo): bool => ! array_key_exists($campo, $regla))) {
+                $razones[] = 'La regla explícita de deduplicación #'.($indice + 1).' está incompleta.';
+
+                continue;
+            }
+
+            $refaccionId = (int) $regla['manual_refaction_id'];
+            $itemId = (int) $regla['cotizacion_item_id'];
+            if (in_array($refaccionId, $idsRefacciones, true) || in_array($itemId, $idsItems, true)) {
+                $razones[] = 'Una refacción manual o item de cotización aparece más de una vez en la autorización explícita.';
+
+                continue;
+            }
+            $idsRefacciones[] = $refaccionId;
+            $idsItems[] = $itemId;
+
+            $refaccion = $orden->refacciones->firstWhere('id', $refaccionId);
+            $item = $cotizacion->items->firstWhere('id', $itemId);
+            $descripcion = (string) $regla['description'];
+            $normalizada = (string) $regla['normalized_description'];
+            $cantidad = (int) $regla['quantity'];
+            $precio = (float) $regla['unit_price'];
+            $costoManual = (float) $regla['manual_unit_cost'];
+            $costoManualTotal = (float) $regla['manual_total_cost'];
+            $costoItemEsperado = (float) $regla['expected_item_unit_cost'];
+            $costoItemTotalEsperado = (float) $regla['expected_item_total_cost'];
+            $costoConfirmado = (float) $regla['confirmed_unit_cost'];
+
+            $valida = (int) $regla['canonical_order_id'] === $orden->id
+                && (string) $regla['canonical_order_folio'] === $orden->folio
+                && (int) $regla['canonical_quote_id'] === $cotizacion->id
+                && (string) $regla['canonical_quote_folio'] === $cotizacion->folio
+                && $regla['type'] === 'refaccion'
+                && $regla['reason'] === 'user_confirmed_same_physical_part'
+                && $refaccion !== null
+                && $refaccion->orden_servicio_id === $orden->id
+                && $refaccion->cotizacion_item_id === null
+                && $item !== null
+                && $item->cotizacion_id === $cotizacion->id
+                && $item->tipo === 'refaccion'
+                && $refaccion->descripcion === $descripcion
+                && $item->descripcion === $descripcion
+                && $this->normalizarDescripcion($refaccion->descripcion) === $normalizada
+                && $this->normalizarDescripcion($item->descripcion) === $normalizada
+                && $refaccion->cantidad === $cantidad
+                && (int) $item->cantidad === $cantidad
+                && $this->mismoImporte($refaccion->precio_unitario_cliente, $precio)
+                && $this->mismoImporte($refaccion->precio_total_cliente, $cantidad * $precio)
+                && $this->mismoImporte($item->precio_unitario, $precio)
+                && $this->mismoImporte($item->subtotal, $cantidad * $precio)
+                && $this->mismoImporte($refaccion->costo_unitario, $costoManual)
+                && $this->mismoImporte($refaccion->costo_total, $costoManualTotal)
+                && $this->mismoImporte($item->costo_unitario, $costoItemEsperado)
+                && $this->mismoImporte($item->costo_total, $costoItemTotalEsperado)
+                && $costoConfirmado >= 0
+                && $this->mismoImporte($costoManual, $costoConfirmado)
+                && $this->mismoImporte($costoManualTotal, $cantidad * $costoConfirmado);
+
+            if (! $valida) {
+                $razones[] = "La autorización explícita para la refacción manual #{$refaccionId} y el item #{$itemId} no coincide exactamente con los datos actuales.";
+
+                continue;
+            }
+
+            $autorizadas[] = [
+                ...$regla,
+                'manual_refaction_id' => $refaccionId,
+                'cotizacion_item_id' => $itemId,
+                'deduplicated_into_cotizacion_item_id' => $itemId,
+                'quantity' => $cantidad,
+                'unit_price' => $precio,
+                'confirmed_unit_cost' => $costoConfirmado,
+            ];
+        }
+
+        return ['authorized' => $autorizadas, 'reasons' => $razones];
+    }
+
+    /** @param array<int, array<string, mixed>> $deduplicaciones */
+    private function aplicarDeduplicacionesRefacciones(
+        array $deduplicaciones,
+        Cotizacion $cotizacion,
+        OrdenServicio $orden,
+    ): void {
+        foreach ($deduplicaciones as $deduplicacion) {
+            $refaccion = OrdenServicioRefaccion::query()
+                ->whereKey($deduplicacion['manual_refaction_id'])
+                ->where('orden_servicio_id', $orden->id)
+                ->whereNull('cotizacion_item_id')
+                ->lockForUpdate()
+                ->firstOrFail();
+            $item = CotizacionItem::query()
+                ->whereKey($deduplicacion['cotizacion_item_id'])
+                ->where('cotizacion_id', $cotizacion->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $calculado = $this->calcularCotizacion->item([
+                'tipo' => $item->tipo,
+                'servicio_id' => $item->servicio_id,
+                'descripcion' => $item->descripcion,
+                'cantidad' => $item->cantidad,
+                'precio_unitario' => $item->precio_unitario,
+                'costo_unitario' => $deduplicacion['confirmed_unit_cost'],
+            ]);
+
+            $item->update([
+                'costo_unitario' => $calculado['costo_unitario'],
+                'costo_total' => $calculado['costo_total'],
+            ]);
+            $refaccion->delete();
+        }
+    }
+
+    private function normalizarDescripcion(string $descripcion): string
+    {
+        return (string) str($descripcion)->ascii()->lower()->squish();
+    }
+
+    private function mismoImporte(mixed $actual, float $esperado): bool
+    {
+        return $actual !== null && abs((float) $actual - $esperado) < 0.001;
     }
 
     private function recalcularCotizacion(Cotizacion $cotizacion): void
