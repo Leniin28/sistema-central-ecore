@@ -25,6 +25,7 @@ class CrearOrdenServicio
             $data = $this->prepararAsignaciones($data, $actor);
             if (! $actor->isAdmin()) {
                 $data['costo_tecnico'] = null;
+                $data['comision_recepcion'] = null;
             }
             $this->validarEquipo($data);
             $detalles = $this->normalizarDetalles($detalles);
@@ -37,6 +38,7 @@ class CrearOrdenServicio
                 'total_cliente' => 0,
                 'costo_tecnico' => $data['costo_tecnico'] ?? null,
                 'comision_logistica' => 0,
+                'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_LEGACY,
                 'utilidad_estimada' => 0,
                 'costos_incompletos' => false,
                 'utilidad_neta' => 0,

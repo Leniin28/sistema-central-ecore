@@ -104,7 +104,11 @@ test('admin sincroniza items de aceptada preservando ids lineas manuales estado 
     $lineaServicioId = $contexto['orden']->detalles()->where('cotizacion_item_id', $servicio->id)->sole()->id;
     $lineaManual = $contexto['orden']->detalles()->whereNull('cotizacion_item_id')->sole();
     $notasOrden = $contexto['orden']->notas;
-    $contexto['orden']->update(['estado' => 'en_proceso']);
+    $contexto['orden']->update([
+        'estado' => 'en_proceso',
+        'comision_recepcion' => 50,
+        'nota_recepcion' => 'Punto recibido originalmente',
+    ]);
 
     $items = [[
         'id' => $servicio->id,
@@ -143,6 +147,9 @@ test('admin sincroniza items de aceptada preservando ids lineas manuales estado 
         ->and($orden->refacciones()->where('cotizacion_item_id', $itemNuevo->id)->count())->toBe(1)
         ->and($orden->estado)->toBe('en_proceso')
         ->and($orden->notas)->toBe($notasOrden)
+        ->and($orden->partner_recepcion_id)->toBe($contexto['partner']->id)
+        ->and($orden->comision_recepcion)->toBe('50.00')
+        ->and($orden->nota_recepcion)->toBe('Punto recibido originalmente')
         ->and($contexto['equipo']->fresh()->accesorios_recibidos)->toBe('Cargador y funda')
         ->and($contexto['equipo']->fresh()->estado_fisico_inicial)->toBe('Rayón leve en tapa')
         ->and((float) $orden->total_cliente)->toBe(1000.0)

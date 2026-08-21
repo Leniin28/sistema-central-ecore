@@ -100,6 +100,21 @@
                     <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">{{ $orden->partnerRecepcion?->nombre ?? 'Sin partner' }}</dd>
                 </div>
 
+                @if (auth()->user()->isAdmin())
+                    <div>
+                        <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Comisión de recepción</dt>
+                        <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">{{ $orden->comision_recepcion === null ? 'Pendiente' : '$'.number_format($orden->comision_recepcion, 2) }}</dd>
+                        <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Dato preparado; todavía no participa en las finanzas legacy.</p>
+                    </div>
+
+                    @if ($orden->nota_recepcion)
+                        <div>
+                            <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Nota de recepción</dt>
+                            <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">{{ $orden->nota_recepcion }}</dd>
+                        </div>
+                    @endif
+                @endif
+
                 <div>
                     <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Partner técnico</dt>
                     <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">{{ $orden->partnerTecnico?->nombre ?? 'Sin partner' }}</dd>

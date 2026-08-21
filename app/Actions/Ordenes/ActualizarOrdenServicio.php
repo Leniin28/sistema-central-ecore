@@ -29,9 +29,12 @@ class ActualizarOrdenServicio
         return DB::transaction(function () use ($orden, $data, $detalles, $refacciones): OrdenServicio {
             $orden = OrdenServicio::query()->lockForUpdate()->findOrFail($orden->id);
 
-            if ($orden->finanzas_generadas || $orden->estado === 'entregado') {
+            if ($orden->finanzas_generadas
+                || $orden->estado === 'entregado'
+                || $orden->estado === 'cancelado'
+                || $orden->orden_canonica_id !== null) {
                 throw ValidationException::withMessages([
-                    'orden' => 'La orden entregada no puede modificarse porque sus finanzas ya están cerradas.',
+                    'orden' => 'La orden cerrada o consolidada no puede modificarse.',
                 ]);
             }
 

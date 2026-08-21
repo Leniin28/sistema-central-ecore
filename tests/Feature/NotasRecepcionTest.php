@@ -107,6 +107,32 @@ test('vista imprimible y fuentes de exportacion conservan utf8 y orientacion lan
         ->not->toContain('Ã');
 });
 
+test('documentos del cliente no exponen nota ni comisión interna de recepción', function () {
+    $datos = datosNotaRecepcion();
+    $datos['orden']->update([
+        'nota_recepcion' => 'REFERENCIA-INTERNA-NO-CLIENTE',
+        'comision_recepcion' => 77.77,
+    ]);
+
+    $this->actingAs($datos['admin'])
+        ->get(route('admin.ordenes-servicio.nota-recepcion', $datos['orden']))
+        ->assertOk()
+        ->assertDontSee('REFERENCIA-INTERNA-NO-CLIENTE')
+        ->assertDontSee('77.77');
+
+    $htmlPdf = view('ordenes-servicio.nota-recepcion-pdf', [
+        'orden' => $datos['orden']->loadMissing(['cliente', 'equipo']),
+        'negocio' => config('negocio'),
+    ])->render();
+    $htmlPng = view('ordenes-servicio.nota-recepcion-png', [
+        'orden' => $datos['orden'],
+        'negocio' => config('negocio'),
+    ])->render();
+
+    expect($htmlPdf)->not->toContain('REFERENCIA-INTERNA-NO-CLIENTE', '77.77')
+        ->and($htmlPng)->not->toContain('REFERENCIA-INTERNA-NO-CLIENTE', '77.77');
+});
+
 test('usuarios que pueden consultar la orden pueden acceder a su nota', function () {
     $datos = datosNotaRecepcion();
 

@@ -23,7 +23,7 @@
             </div>
         @endif
 
-        <form id="recepcion-form" method="POST" action="{{ route($routePrefix.'.recepciones.store') }}" data-logistics-commission="{{ auth()->user()->hasRole('socio_logistico') ? (float) (auth()->user()->partner?->comision_fija ?? 0) : 0 }}" class="grid gap-8 xl:grid-cols-[minmax(0,1fr)_19rem]">
+        <form id="recepcion-form" method="POST" action="{{ route($routePrefix.'.recepciones.store') }}" class="grid gap-8 xl:grid-cols-[minmax(0,1fr)_19rem]">
             @csrf
 
             <div class="min-w-0 space-y-10">
@@ -135,11 +135,13 @@
                     <div class="mt-5 grid gap-4 sm:grid-cols-2">
                         <div><label for="tipo_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tipo de recepción</label><select id="tipo_recepcion" name="orden[tipo_recepcion]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><option value="sucursal">Sucursal</option><option value="domicilio" @selected(old('orden.tipo_recepcion') === 'domicilio')>Domicilio</option><option value="directo" @selected(old('orden.tipo_recepcion') === 'directo')>Directo</option></select></div>
                         @if (auth()->user()->isAdmin())
-                            <div><label for="partner_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Partner logístico</label><select id="partner_recepcion" name="orden[partner_recepcion_id]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><option value="" data-commission="0">Sin partner</option>@foreach ($partnersRecepcion as $partner)<option value="{{ $partner->id }}" data-commission="{{ $partner->comision_fija }}" @selected((int) old('orden.partner_recepcion_id') === $partner->id)>{{ $partner->nombre }}</option>@endforeach</select></div>
+                            <div><label for="partner_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Punto / socio de recepción (opcional)</label><select id="partner_recepcion" name="orden[partner_recepcion_id]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><option value="" data-commission="">Sin partner</option>@foreach ($partnersRecepcion as $partner)<option value="{{ $partner->id }}" data-commission="{{ $partner->comision_fija }}" @selected((int) old('orden.partner_recepcion_id') === $partner->id)>{{ $partner->nombre }}</option>@endforeach</select></div>
+                            <div><label for="comision_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Comisión de recepción</label><input id="comision_recepcion" name="orden[comision_recepcion]" type="number" min="0" max="99999999.99" step="0.01" value="{{ old('orden.comision_recepcion') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Vacío significa pendiente. La sugerencia del partner es editable.</p>@error('orden.comision_recepcion') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror</div>
                         @else
                             <div class="border-l-2 border-blue-500 pl-3 text-sm"><p class="text-neutral-500 dark:text-neutral-400">Partner logístico</p><p class="font-medium text-neutral-950 dark:text-white">{{ auth()->user()->partner?->nombre ?? 'Sin partner asignado' }}</p></div>
                         @endif
                         <div><label for="partner_tecnico" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Partner técnico</label><select id="partner_tecnico" name="orden[partner_tecnico_id]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><option value="">Por asignar</option>@foreach ($partnersTecnicos as $partner)<option value="{{ $partner->id }}" @selected((int) old('orden.partner_tecnico_id') === $partner->id)>{{ $partner->nombre }}</option>@endforeach</select></div>
+                        <div class="sm:col-span-2"><label for="nota_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Nota de recepción</label><input id="nota_recepcion" name="orden[nota_recepcion]" maxlength="255" value="{{ old('orden.nota_recepcion') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Referencia interna opcional, por ejemplo sucursal o persona que recibió el equipo.</p>@error('orden.nota_recepcion') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror</div>
                         <div class="sm:col-span-2"><label for="problema_reportado" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Problema reportado</label><textarea id="problema_reportado" name="orden[problema_reportado]" rows="3" required class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900" placeholder="Describe lo que reporta el cliente y el servicio solicitado.">{{ old('orden.problema_reportado') }}</textarea>@error('orden.problema_reportado') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror</div>
                         <div class="sm:col-span-2"><label for="orden_notas" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Notas internas</label><textarea id="orden_notas" name="orden[notas]" rows="2" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900">{{ old('orden.notas') }}</textarea></div>
                     </div>
@@ -183,11 +185,13 @@
                         <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Servicios</dt><dd id="summary-services" class="font-medium">$0.00</dd></div>
                         <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Refacciones</dt><dd id="summary-parts" class="font-medium">$0.00</dd></div>
                         <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Costo refacciones</dt><dd id="summary-parts-cost" class="font-medium text-red-700 dark:text-red-300">$0.00</dd></div>
-                        <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Comisión logística</dt><dd id="summary-commission" class="font-medium text-red-700 dark:text-red-300">$0.00</dd></div>
+                        @if (auth()->user()->isAdmin())
+                            <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Comisión de recepción</dt><dd id="summary-commission" class="font-medium text-red-700 dark:text-red-300">Pendiente</dd></div>
+                        @endif
                         <div class="flex justify-between gap-4 border-t border-neutral-300 pt-3 dark:border-neutral-700"><dt class="font-semibold">Total al cliente</dt><dd id="summary-total" class="text-lg font-semibold">$0.00</dd></div>
                         <div class="flex justify-between gap-4"><dt class="text-neutral-500 dark:text-neutral-400">Utilidad estimada</dt><dd id="summary-profit" class="font-semibold text-emerald-700 dark:text-emerald-300">$0.00</dd></div>
                     </dl>
-                    <p class="mt-4 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Estimación previa. Las finanzas oficiales se generan cuando la orden se entrega.</p>
+                    <p class="mt-4 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Estimación previa. La comisión de recepción queda registrada, pero todavía no participa en las finanzas legacy.</p>
                     <button type="submit" class="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-500 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200">Guardar recepción</button>
                 </div>
             </aside>
@@ -198,6 +202,8 @@
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.getElementById('recepcion-form');
             const money = value => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value || 0);
+            const commissionInput = document.getElementById('comision_recepcion');
+            let commissionTouched = commissionInput?.value !== '';
 
             const syncModes = () => {
                 ['cliente', 'equipo'].forEach(group => {
@@ -225,20 +231,22 @@
                     costs += quantity * (Number(row.querySelector('[data-part-cost]').value) || 0);
                     parts += quantity * (Number(row.querySelector('[data-part-price]').value) || 0);
                 });
-                const partnerSelect = document.getElementById('partner_recepcion');
-                const commission = partnerSelect
-                    ? Number(partnerSelect.selectedOptions[0]?.dataset.commission || 0)
-                    : Number(form.dataset.logisticsCommission || 0);
+                const commission = Number(commissionInput?.value || 0);
                 document.getElementById('summary-services').textContent = money(services);
                 document.getElementById('summary-parts').textContent = money(parts);
                 document.getElementById('summary-parts-cost').textContent = money(costs);
-                document.getElementById('summary-commission').textContent = money(commission);
+                if (document.getElementById('summary-commission')) {
+                    document.getElementById('summary-commission').textContent = commissionInput?.value === '' ? 'Pendiente' : money(commission);
+                }
                 document.getElementById('summary-total').textContent = money(services + parts);
-                document.getElementById('summary-profit').textContent = money(services + parts - costs - commission);
+                document.getElementById('summary-profit').textContent = money(services + parts - costs);
             };
 
             form.addEventListener('change', event => {
                 if (event.target.matches('input[name$="_modo"]')) syncModes();
+                if (event.target.matches('#partner_recepcion') && commissionInput && !commissionTouched) {
+                    commissionInput.value = event.target.selectedOptions[0]?.dataset.commission || '';
+                }
                 if (event.target.matches('[data-service-select]')) {
                     const row = event.target.closest('[data-service-row]');
                     const price = row.querySelector('[data-service-price]');
@@ -246,7 +254,10 @@
                 }
                 calculate();
             });
-            form.addEventListener('input', calculate);
+            form.addEventListener('input', event => {
+                if (event.target === commissionInput) commissionTouched = true;
+                calculate();
+            });
             syncModes(); calculate();
         });
     </script>

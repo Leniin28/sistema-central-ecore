@@ -280,7 +280,7 @@ test('la API de recepción rechaza un partner_recepcion_id que no es logístico 
     expect(OrdenServicio::count())->toBe(0);
 });
 
-test('la API de recepción no falla si la sucursal no existe: crea la orden con warning y texto en notas', function () {
+test('la API de recepción no falla si la sucursal no existe: crea la orden con warning y nota de recepción', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
     crearPartnersLogisticos();
 
@@ -297,7 +297,68 @@ test('la API de recepción no falla si la sucursal no existe: crea la orden con 
 
     $orden = OrdenServicio::firstWhere('external_id', 'telegram-photo-sin-sucursal');
     expect($orden->partner_recepcion_id)->toBeNull()
-        ->and($orden->notas)->toContain('Sucursal Inexistente');
+        ->and($orden->nota_recepcion)->toBe('Sucursal Inexistente')
+        ->and($orden->notas)->not->toContain('Sucursal Inexistente');
+});
+
+test('la API interna persiste nota explícita sin inferir partner y devuelve el snapshot interno', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    crearPartnersLogisticos();
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', payloadRecepcionApi([
+            'nota_recepcion' => '  Sucursal Alameda  ',
+            'external_id' => 'telegram-photo-nota-independiente',
+        ]));
+
+    $response->assertCreated()
+        ->assertJsonPath('partner_recepcion', null)
+        ->assertJsonPath('nota_recepcion', 'Sucursal Alameda')
+        ->assertJsonPath('comision_recepcion', null);
+
+    $orden = OrdenServicio::firstWhere('external_id', 'telegram-photo-nota-independiente');
+    expect($orden->partner_recepcion_id)->toBeNull()
+        ->and($orden->nota_recepcion)->toBe('Sucursal Alameda')
+        ->and($orden->comision_recepcion)->toBeNull()
+        ->and($orden->modelo_financiero)->toBe(OrdenServicio::MODELO_FINANCIERO_LEGACY);
+});
+
+test('la API interna rechaza confirmar comisión de recepción', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+
+    $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', payloadRecepcionApi([
+            'comision_recepcion' => 50,
+            'external_id' => 'telegram-photo-comision-prohibida',
+        ]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('comision_recepcion');
+
+    expect(OrdenServicio::count())->toBe(0);
+});
+
+test('la idempotencia conserva nota y comisión pendiente de la recepción original', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+
+    $payload = payloadRecepcionApi([
+        'nota_recepcion' => 'Punto inicial',
+        'external_id' => 'telegram-photo-snapshot-idempotente',
+    ]);
+
+    $primera = $this->withToken('token-secreto-pruebas')->postJson('/api/internal/receptions', $payload);
+    $segunda = $this->withToken('token-secreto-pruebas')->postJson('/api/internal/receptions', [
+        ...$payload,
+        'nota_recepcion' => 'Punto alterado',
+    ]);
+
+    $primera->assertCreated()->assertJsonPath('nota_recepcion', 'Punto inicial');
+    $segunda->assertOk()
+        ->assertJsonPath('created', false)
+        ->assertJsonPath('nota_recepcion', 'Punto inicial')
+        ->assertJsonPath('comision_recepcion', null);
+
+    expect(OrdenServicio::count())->toBe(1)
+        ->and(OrdenServicio::sole()->nota_recepcion)->toBe('Punto inicial');
 });
 
 test('la API de recepción no adivina cuando la sucursal es ambigua', function () {

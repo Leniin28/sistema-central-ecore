@@ -203,6 +203,9 @@ test('convierte una cotización en orden con servicios del catálogo y refaccion
     expect($orden->detalles()->count())->toBe(1)
         ->and($orden->refacciones()->count())->toBe(1)
         ->and($orden->origen)->toBe('openclaw-cotizacion')
+        ->and($orden->modelo_financiero)->toBe(OrdenServicio::MODELO_FINANCIERO_LEGACY)
+        ->and($orden->comision_recepcion)->toBeNull()
+        ->and($orden->nota_recepcion)->toBeNull()
         ->and($orden->notas)->toContain($cotizacion->folio)
         ->and($cotizacion->fresh()->notas)->toContain($orden->folio);
 });

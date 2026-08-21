@@ -238,6 +238,10 @@ class OrdenServicioController extends Controller
             'tipo_recepcion' => ['required', Rule::in(['sucursal', 'domicilio', 'directo'])],
             'partner_recepcion_id' => ['nullable', Rule::exists('partners', 'id')->where(fn ($query) => $query->where('tipo_socio', 'logistico')->where('activo', true))],
             'partner_tecnico_id' => ['nullable', Rule::exists('partners', 'id')->where(fn ($query) => $query->where('tipo_socio', 'tecnico')->where('activo', true))],
+            'comision_recepcion' => $request->user()->isAdmin()
+                ? ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:99999999.99']
+                : ['prohibited'],
+            'nota_recepcion' => ['nullable', 'string', 'max:255'],
             'costo_tecnico' => ['nullable', 'numeric', 'min:0'],
             'notas' => ['nullable', 'string'],
         ]);
@@ -248,6 +252,12 @@ class OrdenServicioController extends Controller
         $data['costo_tecnico'] = isset($data['costo_tecnico']) && $data['costo_tecnico'] !== ''
             ? $data['costo_tecnico']
             : null;
+        $data['comision_recepcion'] = array_key_exists('comision_recepcion', $data)
+            && $data['comision_recepcion'] !== ''
+                ? $data['comision_recepcion']
+                : null;
+        $notaRecepcion = trim((string) ($data['nota_recepcion'] ?? ''));
+        $data['nota_recepcion'] = $notaRecepcion !== '' ? $notaRecepcion : null;
 
         return $data;
     }

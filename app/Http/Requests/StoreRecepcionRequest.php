@@ -14,6 +14,22 @@ class StoreRecepcionRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $orden = $this->input('orden', []);
+        if (is_array($orden)) {
+            if (array_key_exists('nota_recepcion', $orden)) {
+                if (is_string($orden['nota_recepcion'])) {
+                    $notaRecepcion = trim($orden['nota_recepcion']);
+                    $orden['nota_recepcion'] = $notaRecepcion !== '' ? $notaRecepcion : null;
+                }
+            }
+
+            if ($this->user()?->isAdmin()
+                && array_key_exists('comision_recepcion', $orden)
+                && $orden['comision_recepcion'] === '') {
+                $orden['comision_recepcion'] = null;
+            }
+        }
+
         $servicios = collect($this->input('servicios', []))
             ->filter(fn ($row): bool => is_array($row) && filled($row['servicio_id'] ?? null))
             ->values()
@@ -28,7 +44,7 @@ class StoreRecepcionRequest extends FormRequest
             ->values()
             ->all();
 
-        $this->merge(compact('servicios', 'refacciones'));
+        $this->merge(compact('orden', 'servicios', 'refacciones'));
     }
 
     /** @return array<string, mixed> */
@@ -56,6 +72,10 @@ class StoreRecepcionRequest extends FormRequest
             'orden.tipo_recepcion' => ['required', Rule::in(['sucursal', 'domicilio', 'directo'])],
             'orden.partner_recepcion_id' => ['nullable', Rule::exists('partners', 'id')->where(fn ($query) => $query->where('tipo_socio', 'logistico')->where('activo', true))],
             'orden.partner_tecnico_id' => ['nullable', Rule::exists('partners', 'id')->where(fn ($query) => $query->where('tipo_socio', 'tecnico')->where('activo', true))],
+            'orden.comision_recepcion' => $this->user()?->isAdmin()
+                ? ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:99999999.99']
+                : ['prohibited'],
+            'orden.nota_recepcion' => ['nullable', 'string', 'max:255'],
             'orden.problema_reportado' => ['required', 'string', 'max:3000'],
             'orden.notas' => ['nullable', 'string', 'max:3000'],
 

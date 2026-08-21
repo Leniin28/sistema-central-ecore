@@ -131,11 +131,29 @@
                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
             @enderror
         </div>
+
+        <div>
+            <label for="comision_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Comisión de recepción</label>
+            <input id="comision_recepcion" name="comision_recepcion" type="number" min="0" max="99999999.99" step="0.01" value="{{ old('comision_recepcion', $orden->comision_recepcion) }}" class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
+            <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Vacío significa pendiente. En esta fase el dato no participa en las finanzas legacy.</p>
+            @error('comision_recepcion')
+                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+            @enderror
+        </div>
     @else
         <div class="rounded-md border border-neutral-200 p-4 text-sm text-neutral-700 dark:border-neutral-700 dark:text-neutral-300">
             Partner de recepción: {{ auth()->user()->partner?->nombre ?? 'Sin partner asignado' }}
         </div>
     @endif
+
+    <div>
+        <label for="nota_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Nota de recepción</label>
+        <input id="nota_recepcion" name="nota_recepcion" maxlength="255" value="{{ old('nota_recepcion', $orden->nota_recepcion) }}" class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
+        <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Referencia interna opcional, por ejemplo sucursal o persona que recibió el equipo.</p>
+        @error('nota_recepcion')
+            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+        @enderror
+    </div>
 
     <div>
         <label for="partner_tecnico_id" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Partner técnico</label>

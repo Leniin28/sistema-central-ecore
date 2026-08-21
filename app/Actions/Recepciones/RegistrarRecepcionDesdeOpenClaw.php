@@ -59,7 +59,11 @@ class RegistrarRecepcionDesdeOpenClaw
             $cliente = $this->resolverCliente($data);
             $equipo = $this->crearEquipo($data, $cliente);
             $partner = $this->resolverPartnerLogistico($data);
-            [$notas, $warnings] = $this->componerNotas($data, $partner['texto']);
+            [$notas, $warnings] = $this->componerNotas($data);
+            $notaRecepcion = $this->resolverNotaRecepcion(
+                $data['nota_recepcion'] ?? null,
+                $partner['warning'] !== null ? $partner['texto'] : null,
+            );
 
             if ($partner['warning'] !== null) {
                 $warnings[] = $partner['warning'];
@@ -71,6 +75,8 @@ class RegistrarRecepcionDesdeOpenClaw
                     'equipo_id' => $equipo->id,
                     // El partner resuelto (o null) lo revalida CrearOrdenServicio::prepararAsignaciones.
                     'partner_recepcion_id' => $partner['id'],
+                    'comision_recepcion' => null,
+                    'nota_recepcion' => $notaRecepcion,
                     'tipo_recepcion' => $data['tipo_recepcion'] ?? 'directo',
                     'notas' => $notas,
                     'costo_tecnico' => null,
@@ -190,10 +196,9 @@ class RegistrarRecepcionDesdeOpenClaw
      * warnings. Suggested services/parts are kept as text (not billable rows).
      *
      * @param  array<string, mixed>  $data
-     * @param  string|null  $sucursalTexto  Texto de sucursal/partner detectado en la etiqueta.
      * @return array{0: string, 1: array<int, string>}
      */
-    private function componerNotas(array $data, ?string $sucursalTexto = null): array
+    private function componerNotas(array $data): array
     {
         $warnings = [];
         $recepcion = $data['recepcion'] ?? [];
@@ -217,9 +222,6 @@ class RegistrarRecepcionDesdeOpenClaw
         if (filled($recepcion['origen'] ?? null)) {
             $meta[] = "Origen: {$recepcion['origen']}";
         }
-        if ($sucursalTexto !== null) {
-            $meta[] = "Sucursal/partner detectado: {$sucursalTexto}";
-        }
         if ($meta !== []) {
             $bloques[] = "Datos de etiqueta:\n".implode("\n", $meta);
         }
@@ -234,5 +236,15 @@ class RegistrarRecepcionDesdeOpenClaw
         $bloques[] = 'Registrado automáticamente por OpenClaw a partir de una foto de etiqueta física.';
 
         return [implode("\n\n", $bloques), $warnings];
+    }
+
+    private function resolverNotaRecepcion(mixed $notaExplicita, ?string $sucursalNoResuelta): ?string
+    {
+        $nota = is_string($notaExplicita) ? trim($notaExplicita) : '';
+        if ($nota === '' && $sucursalNoResuelta !== null) {
+            $nota = trim($sucursalNoResuelta);
+        }
+
+        return $nota !== '' ? mb_substr($nota, 0, 255) : null;
     }
 }

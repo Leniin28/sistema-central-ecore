@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 class InternalReceptionController extends Controller
 {
@@ -41,6 +42,9 @@ class InternalReceptionController extends Controller
             'recepcion.folio_externo' => ['nullable', 'string', 'max:100'],
             'recepcion.origen' => ['nullable', 'string', 'max:100'],
             'recepcion.notas' => ['nullable', 'string', 'max:3000'],
+            'nota_recepcion' => ['nullable', 'string', 'max:255'],
+            // El token interno no distingue a un actor financiero autorizado.
+            'comision_recepcion' => ['prohibited'],
 
             // Sucursal / partner logístico detectado en la etiqueta. Id explícito
             // (validado como logístico activo) o nombre a resolver de forma tolerante.
@@ -123,6 +127,8 @@ class InternalReceptionController extends Controller
                 'id' => $orden->partnerRecepcion->id,
                 'nombre' => $orden->partnerRecepcion->nombre,
             ] : null,
+            'comision_recepcion' => $orden->comision_recepcion === null ? null : (float) $orden->comision_recepcion,
+            'nota_recepcion' => $orden->nota_recepcion,
             'total_cliente' => (float) $orden->total_cliente,
             'servicios_agregados' => $resultado['servicios_agregados'],
             'refacciones_agregadas' => $resultado['refacciones_agregadas'],
@@ -136,7 +142,7 @@ class InternalReceptionController extends Controller
      * Rule that a partner id must reference an active logistics partner
      * (same constraint the web reception form enforces).
      */
-    private function reglaPartnerLogistico(): \Illuminate\Validation\Rules\Exists
+    private function reglaPartnerLogistico(): Exists
     {
         return Rule::exists('partners', 'id')->where(
             fn ($query) => $query->where('tipo_socio', 'logistico')->where('activo', true),
