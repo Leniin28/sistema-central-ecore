@@ -64,6 +64,30 @@ test('consulta una orden por id numérico', function () {
         ->assertJsonPath('folio', $orden->folio);
 });
 
+test('la consulta no expone costos internos ni costos_incompletos', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $cliente = Cliente::create(['nombre' => 'Cliente costos', 'telefono' => '4491112233', 'tipo_cliente' => 'mantenimiento']);
+    $equipo = Equipo::create(['cliente_id' => $cliente->id, 'tipo_equipo' => 'Laptop', 'marca' => 'Lenovo']);
+
+    $orden = app(CrearOrdenServicio::class)->ejecutar([
+        'cliente_id' => $cliente->id,
+        'equipo_id' => $equipo->id,
+        'tipo_recepcion' => 'directo',
+        'costo_tecnico' => 250,
+        'notas' => "Falla reportada:\nNo enciende",
+    ], [], [[
+        'descripcion' => 'USB 16GB', 'cantidad' => 1, 'costo_unitario' => 50, 'precio_unitario_cliente' => 80,
+    ]], $admin);
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->getJson("/api/internal/service-orders/{$orden->folio}");
+
+    $response->assertOk();
+    expect($response->json())->not->toHaveKeys(['costo_tecnico', 'costos_incompletos'])
+        ->and($response->json('refacciones.0'))->not->toHaveKey('costo_unitario');
+});
+
 test('la consulta responde 404 si la orden no existe y 401 sin token', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
     $orden = ordenParaConsulta();

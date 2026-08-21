@@ -339,7 +339,10 @@ class InternalServiceOrderController extends Controller
 
     /**
      * Safe JSON payload of an order for OpenClaw. Loads nothing by itself: the
-     * caller eager-loads. Never includes password_equipo.
+     * caller eager-loads. Never includes password_equipo nor internal financial
+     * fields (costo_tecnico, costos_incompletos, costo_unitario de refacciones)
+     * -- OpenClaw's flows (consulta, corrección de perfil, agregar líneas,
+     * cambio de estado, mensajes) never need them; ver docs/ordenes-openclaw.md.
      *
      * @return array<string, mixed>
      */
@@ -381,14 +384,11 @@ class InternalServiceOrderController extends Controller
             'refacciones' => $orden->refacciones->map(fn ($refaccion): array => [
                 'descripcion' => $refaccion->descripcion,
                 'cantidad' => (int) $refaccion->cantidad,
-                'costo_unitario' => $refaccion->costo_unitario === null ? null : (float) $refaccion->costo_unitario,
                 'precio_unitario_cliente' => (float) $refaccion->precio_unitario_cliente,
                 'precio_total_cliente' => (float) $refaccion->precio_total_cliente,
                 'notas' => $refaccion->notas,
             ])->values()->all(),
             'total_cliente' => (float) $orden->total_cliente,
-            'costo_tecnico' => $orden->costo_tecnico === null ? null : (float) $orden->costo_tecnico,
-            'costos_incompletos' => (bool) $orden->costos_incompletos,
             'finanzas_generadas' => (bool) $orden->finanzas_generadas,
             'fecha_recepcion' => $orden->fecha_recepcion?->toIso8601String(),
             'fecha_entrega' => $orden->fecha_entrega?->toIso8601String(),

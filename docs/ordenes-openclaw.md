@@ -58,9 +58,8 @@ del panel (`CalcularTotalesOrdenServicio`). Los estados usan
   "falla_reportada": "Marco dañado",
   "notas": "Falla reportada:\n...",
   "servicios": [ { "servicio_id": 1, "nombre": "Optimización", "cantidad": 1, "precio_unitario": 550.0, "subtotal": 550.0, "notas": null } ],
-  "refacciones": [ { "descripcion": "USB 16GB", "cantidad": 1, "costo_unitario": 50.0, "precio_unitario_cliente": 80.0, "precio_total_cliente": 80.0, "notas": null } ],
+  "refacciones": [ { "descripcion": "USB 16GB", "cantidad": 1, "precio_unitario_cliente": 80.0, "precio_total_cliente": 80.0, "notas": null } ],
   "total_cliente": 630.0,
-  "costo_tecnico": 0.0,
   "finanzas_generadas": false,
   "fecha_recepcion": "2026-07-05T10:00:00-06:00",
   "fecha_entrega": null,
@@ -69,6 +68,9 @@ del panel (`CalcularTotalesOrdenServicio`). Los estados usan
 ```
 
 - **Nunca** devuelve `password_equipo`; solo `password_registrada` (booleano).
+- **Nunca** devuelve datos financieros internos (`costo_tecnico`, `costos_incompletos`,
+  `costo_unitario` de refacciones): OpenClaw no los necesita para ningún flujo
+  autorizado (consulta, corrección, líneas, estado, mensajes). Ver FASE I.
 - `falla_reportada` se extrae de las notas (la orden no tiene columna dedicada);
   una corrección posterior vía `/profile` gana sobre el valor original. Si no se
   puede determinar, es `null`.
