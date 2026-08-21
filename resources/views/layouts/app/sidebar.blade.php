@@ -48,8 +48,11 @@
                         <flux:sidebar.item icon="tag" :href="route('admin.categorias-servicio.index')" :current="request()->routeIs('admin.categorias-servicio.*')">
                             Categorías
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="chart-bar" :href="route('admin.finanzas.resumen')" :current="request()->routeIs('admin.finanzas.*')">
+                            Resumen financiero
+                        </flux:sidebar.item>
                         <flux:sidebar.item icon="banknotes" :href="route('admin.movimientos-financieros.index')" :current="request()->routeIs('admin.movimientos-financieros.*')">
-                            Finanzas
+                            Movimientos
                         </flux:sidebar.item>
                     </flux:sidebar.group>
                 @endif

@@ -6,6 +6,7 @@ use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\DashboardRedirectController;
 use App\Http\Controllers\EquipoController;
+use App\Http\Controllers\FinanzasResumenController;
 use App\Http\Controllers\LogisticaDashboardController;
 use App\Http\Controllers\MovimientoFinancieroController;
 use App\Http\Controllers\OrdenServicioController;
@@ -36,6 +37,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('movimientos-financieros.store');
         Route::get('movimientos-financieros', [MovimientoFinancieroController::class, 'index'])
             ->name('movimientos-financieros.index');
+        Route::get('finanzas/resumen', [FinanzasResumenController::class, 'index'])
+            ->name('finanzas.resumen');
         Route::post('ordenes-servicio/{ordenServicio}/estado', [OrdenServicioEstadoController::class, 'store'])
             ->name('ordenes-servicio.estado.store');
         Route::patch('ordenes-servicio/{ordenServicio}/costos', [OrdenServicioController::class, 'actualizarCostos'])
