@@ -167,13 +167,15 @@ test('costo técnico permanece visible en el show de una orden legacy', function
 // --- Comisión pendiente marcada como requisito real en costos_por_linea ----
 
 test('comisión de recepción pendiente se marca como requisito financiero real en costos_por_linea', function () {
+    // comision_recepcion sólo es un requisito real en sucursal (fix: aplica
+    // comision solo a recepciones en sucursal) -- en 'directo' NULL no bloquea.
     config(['negocio.modelo_financiero_nuevas_ordenes' => 'costos_por_linea']);
     $contexto = contextoCostosPorLineaUx();
 
     $orden = app(CrearOrdenServicio::class)->ejecutar([
         'cliente_id' => $contexto['cliente']->id,
         'equipo_id' => $contexto['equipo']->id,
-        'tipo_recepcion' => 'directo',
+        'tipo_recepcion' => 'sucursal',
         'notas' => 'Problema reportado:\nComision pendiente',
     ], [], [], $contexto['admin']);
 

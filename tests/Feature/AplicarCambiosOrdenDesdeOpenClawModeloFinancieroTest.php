@@ -95,8 +95,11 @@ test('OpenClaw recalcula costos_por_linea usando comision_recepcion y costos por
 // --- 6: incompletitud vía OpenClaw usa la misma política que el resto del sistema ---
 
 test('OpenClaw: comision_recepcion NULL deja costos_incompletos=true', function () {
+    // comision_recepcion sólo es un requisito real en sucursal (fix: aplica
+    // comision solo a recepciones en sucursal) -- en 'directo' NULL no bloquea.
     $orden = ordenOpenClawModelo([
         'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_COSTOS_POR_LINEA,
+        'tipo_recepcion' => 'sucursal',
         'comision_recepcion' => null,
     ]);
     agregarDetalleDirectoOpenClaw($orden, precioUnitario: 800, costoUnitario: 200);
