@@ -27,11 +27,13 @@ class CrearOrdenServicio
         return DB::transaction(function () use ($data, $detalles, $refacciones, $actor): OrdenServicio {
             // Ningún canal (web, API, OpenClaw, cotizaciones) puede elegir el
             // modelo financiero: se descarta cualquier valor entrante y se
-            // resuelve exclusivamente desde config server-side.
+            // resuelve exclusivamente desde config server-side, después de
+            // autorizar al actor (para no evaluar config ante un actor sin
+            // permiso para crear la orden).
             unset($data['modelo_financiero']);
+            $data = $this->prepararAsignaciones($data, $actor);
             $modeloFinanciero = $this->resolverModelo->ejecutar();
 
-            $data = $this->prepararAsignaciones($data, $actor);
             if (! $actor->isAdmin()) {
                 $data['costo_tecnico'] = null;
                 $data['comision_recepcion'] = null;
