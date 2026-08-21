@@ -14,8 +14,9 @@ use Illuminate\Support\Facades\DB;
  * order, both when creating a reception and when editing an existing order.
  *
  * It APPENDS lines (unlike the panel's ActualizarOrdenServicio, which replaces
- * them) and recomputes total_cliente with the same {@see CalcularTotalesOrdenServicio}
- * the panel uses. It never generates finances (that only happens on delivery) and
+ * them) and recomputes totals via {@see RecalcularTotalesOrdenServicio}, the same
+ * modelo_financiero-aware recompute every other update path uses. It never
+ * generates finances (that only happens on delivery) and
  * refuses orders whose finances are already closed. Services must resolve to a
  * catalog entry (by explicit servicio_id or a safe name match); an unresolved
  * service is never turned into a fake billable line — it becomes a warning + note.
@@ -26,6 +27,7 @@ class AplicarCambiosOrdenDesdeOpenClaw
     public function __construct(
         private CalcularTotalesOrdenServicio $calculadora,
         private MatchearServicioCatalogo $matcher,
+        private RecalcularTotalesOrdenServicio $recalcularTotales,
     ) {}
 
     /**
@@ -62,7 +64,7 @@ class AplicarCambiosOrdenDesdeOpenClaw
                 ]);
             }
 
-            $this->recalcularTotal($orden);
+            $this->recalcularTotales->ejecutar($orden);
 
             if (filled($externalId)) {
                 OpenClawOrderChange::create(['orden_servicio_id' => $orden->id, 'external_id' => $externalId]);
@@ -179,39 +181,6 @@ class AplicarCambiosOrdenDesdeOpenClaw
         }
 
         return $agregadas;
-    }
-
-    /**
-     * Recomputes total_cliente over ALL current lines with the same formula the
-     * web panel uses. It refreshes the estimated profit, but never closes finances.
-     */
-    private function recalcularTotal(OrdenServicio $orden): void
-    {
-        $orden->load(['detalles', 'refacciones']);
-
-        $resumen = $this->calculadora->resumen(
-            $orden->detalles->map(fn ($detalle): array => [
-                'servicio_id' => $detalle->servicio_id,
-                'descripcion' => $detalle->descripcion,
-                'cantidad' => $detalle->cantidad,
-                'precio_unitario' => $detalle->precio_unitario,
-                'costo_unitario' => $detalle->costo_unitario,
-            ])->all(),
-            $orden->refacciones->map(fn ($refaccion): array => [
-                'descripcion' => $refaccion->descripcion,
-                'cantidad' => $refaccion->cantidad,
-                'costo_unitario' => $refaccion->costo_unitario,
-                'precio_unitario_cliente' => $refaccion->precio_unitario_cliente,
-            ])->all(),
-            $orden->costo_tecnico === null ? null : (float) $orden->costo_tecnico,
-            tienePartnerTecnico: $orden->partner_tecnico_id !== null,
-        );
-
-        $orden->update([
-            'total_cliente' => $resumen['total_cliente'],
-            'utilidad_estimada' => $resumen['utilidad_estimada'],
-            'costos_incompletos' => $resumen['costos_incompletos'],
-        ]);
     }
 
     /**
