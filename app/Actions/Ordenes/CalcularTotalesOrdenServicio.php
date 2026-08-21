@@ -2,6 +2,7 @@
 
 namespace App\Actions\Ordenes;
 
+use App\Models\OrdenServicio;
 use Illuminate\Validation\ValidationException;
 
 class CalcularTotalesOrdenServicio
@@ -70,6 +71,8 @@ class CalcularTotalesOrdenServicio
         ?float $costoTecnico = null,
         float $comision = 0,
         bool $tienePartnerTecnico = false,
+        string $modeloFinanciero = OrdenServicio::MODELO_FINANCIERO_LEGACY,
+        ?float $comisionRecepcion = null,
     ): array {
         $detallesCalculados = collect($detalles)->map(fn (array $detalle): array => $this->detalle($detalle));
         $totalServicios = (float) $detallesCalculados->sum('subtotal');
@@ -81,11 +84,16 @@ class CalcularTotalesOrdenServicio
         $costoRefacciones = (float) $refaccionesCalculadas->sum('costo_total');
         $totalCliente = round($totalServicios + $totalRefacciones, 2);
 
-        $costosIncompletos = ($tienePartnerTecnico && $costoTecnico === null) || $detallesCalculados->contains(
-            fn (array $detalle): bool => $detalle['costo_total'] === null,
-        ) || $refaccionesCalculadas->contains(
-            fn (array $refaccion): bool => $refaccion['costo_total'] === null,
+        $costosIncompletos = PoliticaCostosOrdenServicio::costosIncompletos(
+            $modeloFinanciero,
+            $tienePartnerTecnico,
+            $costoTecnico,
+            $comisionRecepcion,
+            $detallesCalculados->contains(fn (array $detalle): bool => $detalle['costo_total'] === null),
+            $refaccionesCalculadas->contains(fn (array $refaccion): bool => $refaccion['costo_total'] === null),
         );
+        $comisionAplicable = PoliticaCostosOrdenServicio::comisionAplicable($modeloFinanciero, $comision, $comisionRecepcion);
+        $costoTecnicoAplicable = PoliticaCostosOrdenServicio::costoTecnicoAplicable($modeloFinanciero, $costoTecnico);
 
         return [
             'total_servicios' => round($totalServicios, 2),
@@ -94,7 +102,7 @@ class CalcularTotalesOrdenServicio
             'costo_refacciones' => round($costoRefacciones, 2),
             'total_cliente' => $totalCliente,
             'costo_total_interno' => round($costoServicios + $costoRefacciones, 2),
-            'utilidad_estimada' => round($totalCliente - $costoServicios - $costoRefacciones - ($costoTecnico ?? 0) - $comision, 2),
+            'utilidad_estimada' => round($totalCliente - $costoServicios - $costoRefacciones - $costoTecnicoAplicable - $comisionAplicable, 2),
             'costos_incompletos' => $costosIncompletos,
         ];
     }

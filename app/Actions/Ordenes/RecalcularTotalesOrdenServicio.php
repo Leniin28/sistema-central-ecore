@@ -14,9 +14,24 @@ class RecalcularTotalesOrdenServicio
         $costoServicios = (float) $orden->detalles->sum('costo_total');
         $costoRefacciones = (float) $orden->refacciones->sum('costo_total');
         $totalCliente = round($totalServicios + $totalRefacciones, 2);
-        $costosIncompletos = $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)
-            || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null)
-            || ($orden->partner_tecnico_id !== null && $orden->costo_tecnico === null);
+
+        $costoTecnico = $orden->costo_tecnico === null ? null : (float) $orden->costo_tecnico;
+        $comisionRecepcion = $orden->comision_recepcion === null ? null : (float) $orden->comision_recepcion;
+
+        $costosIncompletos = PoliticaCostosOrdenServicio::costosIncompletos(
+            $orden->modelo_financiero,
+            $orden->partner_tecnico_id !== null,
+            $costoTecnico,
+            $comisionRecepcion,
+            $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null),
+            $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null),
+        );
+        $comisionAplicable = PoliticaCostosOrdenServicio::comisionAplicable(
+            $orden->modelo_financiero,
+            (float) $orden->comision_logistica,
+            $comisionRecepcion,
+        );
+        $costoTecnicoAplicable = PoliticaCostosOrdenServicio::costoTecnicoAplicable($orden->modelo_financiero, $costoTecnico);
 
         $orden->update([
             'total_cliente' => $totalCliente,
@@ -24,8 +39,8 @@ class RecalcularTotalesOrdenServicio
                 $totalCliente
                 - $costoServicios
                 - $costoRefacciones
-                - (float) $orden->costo_tecnico
-                - (float) $orden->comision_logistica,
+                - $costoTecnicoAplicable
+                - $comisionAplicable,
                 2,
             ),
             'costos_incompletos' => $costosIncompletos,

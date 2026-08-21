@@ -28,6 +28,12 @@ class GenerarFinanzasOrdenServicio
                 return;
             }
 
+            if ($orden->usaCostosPorLinea()) {
+                throw ValidationException::withMessages([
+                    'estado_nuevo' => 'El modelo financiero costos_por_linea todavía no puede generar finanzas. Esta capacidad se habilitará en una fase posterior.',
+                ]);
+            }
+
             $this->validarCostoTecnico->ejecutar($orden);
 
             $movimientosExistentes = $orden->movimientosFinancieros()->lockForUpdate()->get();
