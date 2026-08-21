@@ -37,6 +37,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('movimientos-financieros.store');
         Route::get('movimientos-financieros', [MovimientoFinancieroController::class, 'index'])
             ->name('movimientos-financieros.index');
+        Route::post('movimientos-financieros/{movimientoFinanciero}/revertir', [MovimientoFinancieroController::class, 'revertir'])
+            ->name('movimientos-financieros.revertir');
         Route::get('finanzas/resumen', [FinanzasResumenController::class, 'index'])
             ->name('finanzas.resumen');
         Route::post('ordenes-servicio/{ordenServicio}/estado', [OrdenServicioEstadoController::class, 'store'])

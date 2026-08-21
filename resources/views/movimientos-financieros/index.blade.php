@@ -98,6 +98,7 @@
                             <th scope="col" class="px-4 py-3 text-left text-sm font-semibold text-neutral-900 dark:text-neutral-100">Cliente</th>
                             <th scope="col" class="px-4 py-3 text-left text-sm font-semibold text-neutral-900 dark:text-neutral-100">Partner</th>
                             <th scope="col" class="px-4 py-3 text-left text-sm font-semibold text-neutral-900 dark:text-neutral-100">Descripción</th>
+                            <th scope="col" class="px-4 py-3 text-left text-sm font-semibold text-neutral-900 dark:text-neutral-100">Reversión</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-neutral-200 bg-white dark:divide-neutral-700 dark:bg-neutral-800">
@@ -111,10 +112,36 @@
                                 <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{{ $movimiento->cliente?->nombre ?? 'Sin cliente' }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{{ $movimiento->partner?->nombre ?? 'Sin partner' }}</td>
                                 <td class="px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">{{ $movimiento->descripcion ?? 'Sin descripción' }}</td>
+                                <td class="px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">
+                                    @if ($movimiento->esReversion())
+                                        <span class="inline-flex items-center rounded-full bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+                                            Reversión de #{{ $movimiento->movimiento_original_id }}
+                                        </span>
+                                    @elseif ($movimiento->movimientoReversion)
+                                        <span class="inline-flex items-center rounded-full bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+                                            Revertido (#{{ $movimiento->movimientoReversion->id }})
+                                        </span>
+                                    @elseif (! $movimiento->esEstructurado())
+                                        <details class="text-xs">
+                                            <summary class="cursor-pointer font-medium text-neutral-700 hover:underline dark:text-neutral-300">Revertir</summary>
+                                            <form method="POST" action="{{ route('admin.movimientos-financieros.revertir', $movimiento) }}" class="mt-2 flex min-w-[220px] flex-col gap-2">
+                                                @csrf
+                                                <p class="text-neutral-600 dark:text-neutral-400">
+                                                    La reversión no elimina el movimiento original. Se registrará un movimiento compensatorio.
+                                                </p>
+                                                <label for="motivo_reversion_{{ $movimiento->id }}" class="font-medium text-neutral-700 dark:text-neutral-300">Motivo (obligatorio)</label>
+                                                <textarea id="motivo_reversion_{{ $movimiento->id }}" name="motivo_reversion" required rows="2" class="rounded-md border-neutral-300 text-xs shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"></textarea>
+                                                <button type="submit" class="self-start rounded-md border border-neutral-300 px-3 py-1 font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
+                                                    Confirmar reversión
+                                                </button>
+                                            </form>
+                                        </details>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-4 py-8 text-center text-sm text-neutral-600 dark:text-neutral-400">
+                                <td colspan="9" class="px-4 py-8 text-center text-sm text-neutral-600 dark:text-neutral-400">
                                     No hay movimientos financieros registrados.
                                 </td>
                             </tr>

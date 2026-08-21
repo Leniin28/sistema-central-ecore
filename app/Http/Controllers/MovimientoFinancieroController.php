@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Finanzas\RevertirMovimientoFinanciero;
 use App\Models\Cliente;
 use App\Models\MovimientoFinanciero;
 use App\Models\Partner;
@@ -49,7 +50,7 @@ class MovimientoFinancieroController extends Controller
         ]);
 
         $query = MovimientoFinanciero::query()
-            ->with(['ordenServicio', 'cotizacion', 'cliente', 'partner']);
+            ->with(['ordenServicio', 'cotizacion', 'cliente', 'partner', 'movimientoOriginal', 'movimientoReversion']);
 
         $this->applyFilters($query, $filters);
 
@@ -115,6 +116,24 @@ class MovimientoFinancieroController extends Controller
         return redirect()
             ->route('admin.movimientos-financieros.index')
             ->with('status', 'Movimiento financiero registrado correctamente.');
+    }
+
+    /**
+     * Revert a manual/independent financial movement via a compensating
+     * movement of the opposite tipo. The original is never edited or
+     * deleted; see {@see RevertirMovimientoFinanciero}.
+     */
+    public function revertir(Request $request, MovimientoFinanciero $movimientoFinanciero, RevertirMovimientoFinanciero $accion): RedirectResponse
+    {
+        $data = $request->validate([
+            'motivo_reversion' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $accion->ejecutar($movimientoFinanciero, $data['motivo_reversion'], $request->user());
+
+        return redirect()
+            ->route('admin.movimientos-financieros.index')
+            ->with('status', 'Movimiento revertido correctamente. El movimiento original permanece intacto.');
     }
 
     /**
