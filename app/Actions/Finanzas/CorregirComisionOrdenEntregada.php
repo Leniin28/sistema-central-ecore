@@ -81,7 +81,7 @@ class CorregirComisionOrdenEntregada
                 'tipo' => $delta > 0 ? 'egreso' : 'ingreso',
                 'categoria' => $categoria,
                 'monto' => abs($delta),
-                'descripcion' => 'Corrección de comisión de recepción en orden '.$orden->folio.' ('.$motivo.')',
+                'descripcion' => 'Corrección de comisión de '.($esCostosPorLinea ? 'recepción' : 'logística').' en orden '.$orden->folio.' ('.$motivo.')',
                 'fecha' => today(),
                 'ajuste_financiero_orden_id' => $ajuste->id,
             ]);
