@@ -6,7 +6,6 @@ use App\Models\Equipo;
 use App\Models\GeneracionFinancieraOrden;
 use App\Models\MovimientoFinanciero;
 use App\Models\OrdenServicio;
-use App\Models\Partner;
 use App\Models\User;
 use App\Services\GenerarFinanzasOrdenServicio;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -147,4 +146,3 @@ test('generar() es idempotente y no crea un segundo lote en la segunda llamada',
 
     expect(GeneracionFinancieraOrden::count())->toBe(1);
 });
-

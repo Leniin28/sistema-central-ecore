@@ -308,6 +308,62 @@ test('el detalle de la orden muestra el mensaje seguro cuando la entrega es hist
         ->assertDontSee('Esta entrega fue un error');
 });
 
+test('anula una entrega legacy y restaura comision_logistica a 0', function () {
+    $admin = adminAnulacion();
+    $partner = Partner::create(['nombre' => 'Electrocom anulación legacy', 'tipo_socio' => 'logistico', 'comision_fija' => 80, 'activo' => true]);
+    $partnerTecnico = Partner::create(['nombre' => 'Fixop anulación legacy', 'tipo_socio' => 'tecnico', 'comision_fija' => 0, 'activo' => true]);
+    $cliente = Cliente::create(['nombre' => 'Cliente anulación legacy', 'telefono' => '4491116604', 'tipo_cliente' => 'mantenimiento']);
+
+    $orden = OrdenServicio::create([
+        'folio' => 'OS-ANULLEG-'.fake()->unique()->numerify('#####'),
+        'cliente_id' => $cliente->id,
+        'partner_recepcion_id' => $partner->id,
+        'partner_tecnico_id' => $partnerTecnico->id,
+        'creado_por_user_id' => $admin->id,
+        'tipo_recepcion' => 'sucursal',
+        'estado' => 'recibido',
+        'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_LEGACY,
+        'total_cliente' => 1000,
+        'costo_tecnico' => 100,
+        'utilidad_estimada' => 0,
+        'utilidad_neta' => 0,
+        'costos_incompletos' => false,
+        'finanzas_generadas' => false,
+    ]);
+
+    $estadoAnterior = $orden->estado;
+    $orden->update(['estado' => 'entregado', 'fecha_entrega' => today()]);
+    $orden->historialEstados()->create([
+        'user_id' => $admin->id, 'estado_anterior' => $estadoAnterior, 'estado_nuevo' => 'entregado', 'comentario' => null,
+    ]);
+    app(GenerarFinanzasOrdenServicio::class)->generar($orden->fresh());
+    $orden->refresh();
+    expect((float) $orden->comision_logistica)->toBe(80.0);
+
+    $lote = GeneracionFinancieraOrden::where('orden_servicio_id', $orden->id)->sole();
+    $movimientosOriginales = MovimientoFinanciero::where('generacion_financiera_orden_id', $lote->id)->get();
+
+    app(AnularEntregaOrdenServicio::class)->ejecutar($orden, 'error de entrega legacy', $admin);
+
+    $orden->refresh();
+    expect($orden->estado)->toBe($estadoAnterior)
+        ->and($orden->finanzas_generadas)->toBeFalse()
+        ->and($orden->fecha_entrega)->toBeNull()
+        ->and((float) $orden->utilidad_neta)->toBe(0.0)
+        ->and((float) $orden->comision_logistica)->toBe(0.0)
+        // costo_tecnico es un dato capturado (no un derivado de la entrega): se conserva.
+        ->and((float) $orden->costo_tecnico)->toBe(100.0);
+
+    foreach ($movimientosOriginales as $original) {
+        $original->refresh();
+        expect($original->ajuste_financiero_orden_id)->toBeNull();
+    }
+
+    $ingresos = (float) MovimientoFinanciero::where('orden_servicio_id', $orden->id)->where('tipo', 'ingreso')->sum('monto');
+    $egresos = (float) MovimientoFinanciero::where('orden_servicio_id', $orden->id)->where('tipo', 'egreso')->sum('monto');
+    expect(round($ingresos - $egresos, 2))->toBe(0.0);
+});
+
 test('una orden no entregada bloquea la anulación de entrega', function () {
     $admin = adminAnulacion();
     $cliente = Cliente::create(['nombre' => 'Cliente no entregada', 'telefono' => '4491116602', 'tipo_cliente' => 'mantenimiento']);
