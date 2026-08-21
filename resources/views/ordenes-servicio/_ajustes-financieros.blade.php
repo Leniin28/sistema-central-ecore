@@ -117,6 +117,37 @@
             </details>
         @endif
 
+        <details class="rounded-md border border-neutral-200 p-3 dark:border-neutral-700">
+            <summary class="cursor-pointer text-sm font-medium text-neutral-700 hover:underline dark:text-neutral-300">Corregir comisión</summary>
+            <form method="POST" action="{{ route('admin.ordenes-servicio.comision.store', $orden) }}" class="mt-3 grid gap-3 sm:grid-cols-2">
+                @csrf
+                <div>
+                    <label for="comision_nueva" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                        {{ $orden->usaCostosPorLinea() ? 'Comisión de recepción real' : 'Comisión logística real' }}
+                    </label>
+                    <input id="comision_nueva" name="comision_nueva" type="number" step="0.01" min="0" required
+                        value="{{ old('comision_nueva', $orden->usaCostosPorLinea() ? $orden->comision_recepcion : $orden->comision_logistica) }}"
+                        class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
+                    @error('comision_nueva')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="comision_motivo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Motivo (obligatorio)</label>
+                    <textarea id="comision_motivo" name="motivo" rows="2" required class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"></textarea>
+                    @error('motivo')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+                <div class="sm:col-span-2">
+                    <button type="submit" class="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900">
+                        Confirmar corrección
+                    </button>
+                    <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">La comisión original no se borra: se registra un movimiento compensatorio por la diferencia.</p>
+                </div>
+            </form>
+        </details>
+
         @if ($orden->ajustesFinancieros->isNotEmpty())
             <div class="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
                 <div class="overflow-x-auto">

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Finanzas\CorregirComisionOrdenEntregada;
 use App\Actions\Finanzas\CorregirCostoInternoOrdenEntregada;
 use App\Actions\Finanzas\RegistrarReembolsoOrdenServicio;
 use App\Models\OrdenServicio;
@@ -74,5 +75,31 @@ class OrdenServicioAjusteController extends Controller
         return redirect()
             ->route('admin.ordenes-servicio.show', $ordenServicio)
             ->with('status', 'Costo interno corregido correctamente.');
+    }
+
+    public function comision(
+        Request $request,
+        OrdenServicio $ordenServicio,
+        CorregirComisionOrdenEntregada $accion,
+    ): RedirectResponse {
+        $data = $request->validate([
+            'comision_nueva' => ['required', 'numeric', 'min:0'],
+            'motivo' => ['required', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $accion->ejecutar(
+                $ordenServicio,
+                (float) $data['comision_nueva'],
+                $data['motivo'],
+                $request->user(),
+            );
+        } catch (ValidationException $exception) {
+            return back()->withErrors($exception->errors())->withInput();
+        }
+
+        return redirect()
+            ->route('admin.ordenes-servicio.show', $ordenServicio)
+            ->with('status', 'Comisión corregida correctamente.');
     }
 }
