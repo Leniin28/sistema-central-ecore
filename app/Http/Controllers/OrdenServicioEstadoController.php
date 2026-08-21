@@ -70,9 +70,14 @@ class OrdenServicioEstadoController extends Controller
             return back()->withErrors(['estado_nuevo' => $exception->getMessage()]);
         }
 
+        $nuevoLabel = OrdenServicio::ESTADOS_LABELS[$data['estado_nuevo']] ?? $data['estado_nuevo'];
+        $status = $data['estado_nuevo'] === 'entregado'
+            ? 'Entrega registrada correctamente.'
+            : "Estado actualizado a \"{$nuevoLabel}\" correctamente.";
+
         return redirect()
             ->route($this->routePrefix().'.ordenes-servicio.show', $ordenServicio)
-            ->with('status', 'Estado actualizado correctamente.');
+            ->with('status', $status);
     }
 
     /**

@@ -233,3 +233,24 @@ test('OpenClaw no puede enviar comision_recepcion en una recepción', function (
         ->assertStatus(422)
         ->assertJsonValidationErrors('comision_recepcion');
 });
+
+// --- J2: mensaje de entrega bloqueada por comisión de sucursal pendiente ----
+
+test('J2: la pantalla de entrega muestra el mensaje exacto cuando falta la comisión de sucursal', function () {
+    $contexto = contextoComisionModalidad();
+    $orden = ordenModalidad($contexto, ['comision_recepcion' => null]);
+    agregarServicioModalidad($orden, 300, 100);
+    app(RecalcularTotalesOrdenServicio::class)->ejecutar($orden);
+    $orden->update(['estado' => 'listo_para_entregar']);
+
+    $this->actingAs($contexto['admin'])
+        ->from(route('admin.ordenes-servicio.show', $orden))
+        ->post(route('admin.ordenes-servicio.estado.store', $orden), ['estado_nuevo' => 'entregado'])
+        ->assertRedirect(route('admin.ordenes-servicio.show', $orden))
+        ->assertSessionHasErrors([
+            'estado_nuevo' => 'Confirma la comisión de recepción antes de entregar esta orden. Puedes registrar $0 si no hubo comisión.',
+        ]);
+
+    expect($orden->fresh()->estado)->toBe('listo_para_entregar')
+        ->and($orden->fresh()->finanzas_generadas)->toBeFalse();
+});

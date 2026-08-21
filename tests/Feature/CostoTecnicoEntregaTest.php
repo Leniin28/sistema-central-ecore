@@ -267,6 +267,16 @@ test('costo técnico positivo crea exactamente un pago para el partner asignado'
         ->and((float) $movimientos->sole()->monto)->toBe(125.5);
 });
 
+test('J6: entregar una orden deja un mensaje de éxito específico, no genérico', function () {
+    $contexto = contextoCostoTecnico();
+    $orden = crearOrdenCostoTecnico($contexto, 0);
+
+    $this->actingAs($contexto['admin'])
+        ->post(route('admin.ordenes-servicio.estado.store', $orden), ['estado_nuevo' => 'entregado'])
+        ->assertRedirect(route('admin.ordenes-servicio.show', $orden))
+        ->assertSessionHas('status', 'Entrega registrada correctamente.');
+});
+
 test('la migración final permite null y conserva un cero explícito', function () {
     $contexto = contextoCostoTecnico();
     $orden = crearOrdenCostoTecnico($contexto, 0);

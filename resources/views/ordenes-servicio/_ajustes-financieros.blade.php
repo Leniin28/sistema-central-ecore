@@ -190,7 +190,7 @@
             <p class="text-sm font-medium text-red-800 dark:text-red-300">Anular entrega por error</p>
             @if (! $tieneLoteEntrega)
                 <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                    Esta entrega es anterior a la trazabilidad necesaria y requiere revisión manual. No se puede anular desde aquí.
+                    No se puede anular automáticamente esta entrega porque es anterior a la trazabilidad financiera necesaria. Requiere revisión manual. La entrega permanece registrada.
                 </p>
             @else
                 <details class="mt-2">

@@ -31,6 +31,12 @@ class RegistrarReembolsoOrdenServicio
         return DB::transaction(function () use ($orden, $monto, $motivo, $actor, $fecha): AjusteFinancieroOrden {
             $orden = OrdenServicio::query()->lockForUpdate()->findOrFail($orden->id);
 
+            if ($orden->estado === 'cancelado') {
+                throw ValidationException::withMessages([
+                    'monto' => 'Esta orden fue cancelada; no se pueden registrar reembolsos sobre ella.',
+                ]);
+            }
+
             if ($orden->estado !== 'entregado' || ! $orden->finanzas_generadas) {
                 throw ValidationException::withMessages([
                     'monto' => 'Solo se pueden registrar reembolsos sobre órdenes entregadas con finanzas generadas.',
@@ -57,9 +63,13 @@ class RegistrarReembolsoOrdenServicio
             $totalReembolsadoNuevo = round($totalReembolsadoPrevio + $montoRedondeado, 2);
 
             if ($totalReembolsadoNuevo > $ventaBruta + 0.01) {
+                $maximoAdicional = max(round($ventaBruta - $totalReembolsadoPrevio, 2), 0.0);
+
                 throw ValidationException::withMessages([
-                    'monto' => 'El reembolso excede la venta bruta de la orden. Ya se han reembolsado $'
-                        .number_format($totalReembolsadoPrevio, 2).' de $'.number_format($ventaBruta, 2).'.',
+                    'monto' => 'El reembolso excede el saldo disponible de esta orden. Total vendido: $'
+                        .number_format($ventaBruta, 2).'. Total ya reembolsado: $'
+                        .number_format($totalReembolsadoPrevio, 2).'. Máximo adicional disponible: $'
+                        .number_format($maximoAdicional, 2).'.',
                 ]);
             }
 

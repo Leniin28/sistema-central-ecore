@@ -20,6 +20,17 @@ use Illuminate\Validation\ValidationException;
  */
 class OrdenServicioAjusteController extends Controller
 {
+    /**
+     * Mensajes en español compartidos por los formularios de ajuste
+     * financiero (FASE J.4/J.5): la app corre con APP_LOCALE=en, así que sin
+     * estos mensajes explícitos las reglas 'required'/'numeric'/'min' caerían
+     * al inglés por defecto de Laravel dentro de una UI en español.
+     */
+    private const MENSAJES_MOTIVO = [
+        'motivo.required' => 'El motivo es obligatorio para registrar este ajuste.',
+        'motivo.max' => 'El motivo no puede superar los 1000 caracteres.',
+    ];
+
     public function reembolso(
         Request $request,
         OrdenServicio $ordenServicio,
@@ -29,6 +40,12 @@ class OrdenServicioAjusteController extends Controller
             'monto' => ['required', 'numeric', 'min:0.01'],
             'motivo' => ['required', 'string', 'max:1000'],
             'fecha' => ['nullable', 'date', 'before_or_equal:today'],
+        ], [
+            ...self::MENSAJES_MOTIVO,
+            'monto.required' => 'Indica el monto a reembolsar.',
+            'monto.numeric' => 'El monto a reembolsar debe ser un número.',
+            'monto.min' => 'El monto a reembolsar debe ser mayor a cero.',
+            'fecha.before_or_equal' => 'La fecha del reembolso no puede ser futura.',
         ]);
 
         try {
@@ -58,6 +75,13 @@ class OrdenServicioAjusteController extends Controller
             'linea_id' => ['required', 'integer', 'min:1'],
             'costo_nuevo' => ['required', 'numeric', 'min:0'],
             'motivo' => ['required', 'string', 'max:1000'],
+        ], [
+            ...self::MENSAJES_MOTIVO,
+            'linea_tipo.required' => 'Selecciona la línea a corregir.',
+            'linea_id.required' => 'Selecciona la línea a corregir.',
+            'costo_nuevo.required' => 'Indica el costo unitario correcto.',
+            'costo_nuevo.numeric' => 'El costo unitario debe ser un número.',
+            'costo_nuevo.min' => 'El costo unitario corregido no puede ser negativo.',
         ]);
 
         try {
@@ -86,6 +110,11 @@ class OrdenServicioAjusteController extends Controller
         $data = $request->validate([
             'comision_nueva' => ['required', 'numeric', 'min:0'],
             'motivo' => ['required', 'string', 'max:1000'],
+        ], [
+            ...self::MENSAJES_MOTIVO,
+            'comision_nueva.required' => 'Indica la comisión corregida.',
+            'comision_nueva.numeric' => 'La comisión corregida debe ser un número.',
+            'comision_nueva.min' => 'La comisión corregida no puede ser negativa.',
         ]);
 
         try {
@@ -111,7 +140,7 @@ class OrdenServicioAjusteController extends Controller
     ): RedirectResponse {
         $data = $request->validate([
             'motivo' => ['required', 'string', 'max:1000'],
-        ]);
+        ], self::MENSAJES_MOTIVO);
 
         try {
             $accion->ejecutar($ordenServicio, $data['motivo'], $request->user());

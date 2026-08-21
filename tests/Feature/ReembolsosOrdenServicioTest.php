@@ -121,6 +121,24 @@ test('el reembolso no puede exceder la venta bruta acumulada', function () {
     expect($orden->totalReembolsado())->toBe(1000.0);
 });
 
+/** J4: el mensaje de exceso debe mostrar total vendido, ya reembolsado y máximo adicional disponible. */
+test('J4: el mensaje de reembolso excesivo desglosa venta, reembolsado y máximo disponible', function () {
+    $orden = ordenEntregadaParaReembolso();
+    $actor = adminReembolso();
+
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden, 1000, 'primer reembolso', $actor);
+
+    try {
+        app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 600, 'excede', $actor);
+        $this->fail('Se esperaba ValidationException');
+    } catch (ValidationException $exception) {
+        $mensaje = $exception->errors()['monto'][0];
+        expect($mensaje)->toContain('Total vendido: $1,500.00')
+            ->toContain('Total ya reembolsado: $1,000.00')
+            ->toContain('Máximo adicional disponible: $500.00');
+    }
+});
+
 test('un reembolso de monto cero o negativo es bloqueado', function () {
     $orden = ordenEntregadaParaReembolso();
     $actor = adminReembolso();
@@ -139,7 +157,7 @@ test('el motivo del reembolso es obligatorio vía HTTP', function () {
 
     $this->actingAs($admin)
         ->post(route('admin.ordenes-servicio.reembolso.store', $orden), ['monto' => 100])
-        ->assertSessionHasErrors('motivo');
+        ->assertSessionHasErrors(['motivo' => 'El motivo es obligatorio para registrar este ajuste.']);
 
     expect(AjusteFinancieroOrden::count())->toBe(0);
 });
@@ -465,7 +483,10 @@ test('una orden cancelada bloquea el reembolso', function () {
     ]);
 
     expect(fn () => app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden, 100, 'motivo', $admin))
-        ->toThrow(ValidationException::class);
+        ->toThrow(
+            ValidationException::class,
+            'Esta orden fue cancelada; no se pueden registrar reembolsos sobre ella.',
+        );
 
     expect(AjusteFinancieroOrden::count())->toBe(0);
 });

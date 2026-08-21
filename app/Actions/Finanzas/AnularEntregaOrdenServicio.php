@@ -36,7 +36,7 @@ class AnularEntregaOrdenServicio
 
             if ($orden->estado !== 'entregado' || ! $orden->finanzas_generadas) {
                 throw ValidationException::withMessages([
-                    'orden' => 'Solo se puede anular la entrega de una orden entregada con finanzas generadas.',
+                    'orden' => 'No se puede anular esta entrega: la orden no está actualmente entregada con finanzas generadas.',
                 ]);
             }
 
@@ -49,7 +49,7 @@ class AnularEntregaOrdenServicio
 
             if ($lote === null) {
                 throw ValidationException::withMessages([
-                    'orden' => 'Esta entrega es anterior a la trazabilidad necesaria y requiere revisión manual.',
+                    'orden' => 'No se puede anular automáticamente esta entrega porque es anterior a la trazabilidad financiera necesaria. Requiere revisión manual. La entrega permanece registrada.',
                 ]);
             }
 
@@ -66,7 +66,7 @@ class AnularEntregaOrdenServicio
 
             if ($ajustesPosteriores) {
                 throw ValidationException::withMessages([
-                    'orden' => 'Existen reembolsos o correcciones registrados después de esta entrega; anular quedaría ambiguo. Revísalos antes de continuar.',
+                    'orden' => 'No se puede anular esta entrega. Esta orden tiene reembolsos o correcciones registrados después de la entrega. La entrega permanece registrada. Revísalos antes de continuar.',
                 ]);
             }
 

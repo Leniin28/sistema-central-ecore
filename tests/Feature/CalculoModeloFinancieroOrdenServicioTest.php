@@ -349,6 +349,50 @@ test('costos_por_linea bloquea entrega cuando quedan costos incompletos', functi
         ->toThrow(CostoTecnicoPendienteException::class);
 });
 
+test('J2: comisión de recepción pendiente en sucursal produce el mensaje exacto de la FASE J', function () {
+    $orden = ordenCalculoFinanciero([
+        'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_COSTOS_POR_LINEA,
+        'tipo_recepcion' => 'sucursal',
+        'comision_recepcion' => null,
+    ]);
+    app(RecalcularTotalesOrdenServicio::class)->ejecutar($orden);
+
+    expect(fn () => app(ValidarCostoTecnicoParaEntrega::class)->ejecutar($orden->fresh()))
+        ->toThrow(
+            CostoTecnicoPendienteException::class,
+            'Confirma la comisión de recepción antes de entregar esta orden. Puedes registrar $0 si no hubo comisión.',
+        );
+});
+
+test('J2: servicio sin costo interno en costos_por_linea produce un mensaje distinto al de comisión', function () {
+    $orden = ordenCalculoFinanciero([
+        'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_COSTOS_POR_LINEA,
+        'tipo_recepcion' => 'directo',
+        'comision_recepcion' => null,
+    ]);
+    agregarDetalleCalculo($orden, precioUnitario: 500, costoUnitario: null);
+    app(RecalcularTotalesOrdenServicio::class)->ejecutar($orden);
+
+    expect(fn () => app(ValidarCostoTecnicoParaEntrega::class)->ejecutar($orden->fresh()))
+        ->toThrow(CostoTecnicoPendienteException::class, 'Hay servicios con costo interno pendiente.');
+});
+
+test('J2: comisión pendiente y servicio sin costo combinan ambos mensajes', function () {
+    $orden = ordenCalculoFinanciero([
+        'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_COSTOS_POR_LINEA,
+        'tipo_recepcion' => 'sucursal',
+        'comision_recepcion' => null,
+    ]);
+    agregarDetalleCalculo($orden, precioUnitario: 500, costoUnitario: null);
+    app(RecalcularTotalesOrdenServicio::class)->ejecutar($orden);
+
+    expect(fn () => app(ValidarCostoTecnicoParaEntrega::class)->ejecutar($orden->fresh()))
+        ->toThrow(
+            CostoTecnicoPendienteException::class,
+            'Confirma la comisión de recepción antes de entregar esta orden. Puedes registrar $0 si no hubo comisión. Hay servicios con costo interno pendiente.',
+        );
+});
+
 // --- Cero explícito no se confunde con NULL ---------------------------------
 
 test('en costos_por_linea comisión cero y comisión NULL producen resultados distintos', function () {

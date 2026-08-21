@@ -13,6 +13,8 @@ class ValidarCostoTecnicoParaEntrega
             $orden->loadMissing(['detalles', 'refacciones']);
 
             $comisionRecepcion = $orden->comision_recepcion === null ? null : (float) $orden->comision_recepcion;
+            $hayServicioSinCosto = $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null);
+            $hayRefaccionSinCosto = $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null);
 
             // Recalcula sobre los datos actuales bajo lock: el booleano
             // costos_incompletos persistido es solo un snapshot para UI y
@@ -24,16 +26,29 @@ class ValidarCostoTecnicoParaEntrega
                 tienePartnerTecnico: false,
                 costoTecnico: null,
                 comisionRecepcion: $comisionRecepcion,
-                hayServicioSinCosto: $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null),
-                hayRefaccionSinCosto: $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null),
+                hayServicioSinCosto: $hayServicioSinCosto,
+                hayRefaccionSinCosto: $hayRefaccionSinCosto,
             );
 
             if ($incompleto) {
-                $mensaje = PoliticaCostosOrdenServicio::requiereComisionRecepcion($orden->modelo_financiero, $orden->tipo_recepcion)
-                    ? 'Completa la comisión de recepción y los costos de servicios/refacciones antes de entregar la orden.'
-                    : 'Completa los costos de servicios/refacciones antes de entregar la orden.';
+                $comisionPendiente = PoliticaCostosOrdenServicio::requiereComisionRecepcion($orden->modelo_financiero, $orden->tipo_recepcion)
+                    && $comisionRecepcion === null;
 
-                throw new CostoTecnicoPendienteException($mensaje);
+                $partes = [];
+
+                if ($comisionPendiente) {
+                    $partes[] = 'Confirma la comisión de recepción antes de entregar esta orden. Puedes registrar $0 si no hubo comisión.';
+                }
+
+                if ($hayServicioSinCosto && $hayRefaccionSinCosto) {
+                    $partes[] = 'Hay servicios y refacciones con costo interno pendiente.';
+                } elseif ($hayServicioSinCosto) {
+                    $partes[] = 'Hay servicios con costo interno pendiente.';
+                } elseif ($hayRefaccionSinCosto) {
+                    $partes[] = 'Hay refacciones con costo interno pendiente.';
+                }
+
+                throw new CostoTecnicoPendienteException(implode(' ', $partes));
             }
 
             return;

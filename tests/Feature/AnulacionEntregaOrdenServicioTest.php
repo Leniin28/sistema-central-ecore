@@ -208,6 +208,82 @@ test('una entrega con un reembolso posterior no puede anularse', function () {
         ->toThrow(ValidationException::class);
 });
 
+/**
+ * J3: caso detectado manualmente en OS-20260821-0001 -- el admin no supo
+ * claramente si la anulación se había ejecutado o no cuando fue bloqueada
+ * por un reembolso posterior. El mensaje ahora deja explícito que NO se
+ * anuló y que la entrega permanece registrada.
+ */
+test('J3: el bloqueo por reembolso posterior deja explícito que la entrega no se anuló', function () {
+    ['orden' => $orden] = escenarioAnulacionEntrega();
+    $actor = adminAnulacion();
+
+    app(RegistrarReembolsoOrdenServicio::class)->ejecutar($orden->fresh(), 100, 'reembolso posterior', $actor);
+
+    try {
+        app(AnularEntregaOrdenServicio::class)->ejecutar($orden->fresh(), 'motivo', $actor);
+        $this->fail('Se esperaba ValidationException');
+    } catch (ValidationException $exception) {
+        $mensaje = $exception->errors()['orden'][0];
+        expect($mensaje)->toContain('No se puede anular esta entrega.')
+            ->toContain('reembolsos o correcciones registrados después de la entrega')
+            ->toContain('La entrega permanece registrada.');
+    }
+
+    expect($orden->fresh()->estado)->toBe('entregado')
+        ->and($orden->fresh()->finanzas_generadas)->toBeTrue();
+});
+
+test('J3: la entrega histórica sin lote deja explícito que requiere revisión manual', function () {
+    $admin = adminAnulacion();
+    $cliente = Cliente::create(['nombre' => 'Cliente histórico J3', 'telefono' => '4491116605', 'tipo_cliente' => 'mantenimiento']);
+
+    $orden = OrdenServicio::create([
+        'folio' => 'OS-HISTJ3-'.fake()->unique()->numerify('#####'),
+        'cliente_id' => $cliente->id,
+        'creado_por_user_id' => $admin->id,
+        'tipo_recepcion' => 'directo',
+        'estado' => 'entregado',
+        'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_LEGACY,
+        'total_cliente' => 800,
+        'utilidad_estimada' => 100,
+        'utilidad_neta' => 100,
+        'costos_incompletos' => false,
+        'finanzas_generadas' => true,
+        'fecha_entrega' => today(),
+    ]);
+
+    try {
+        app(AnularEntregaOrdenServicio::class)->ejecutar($orden, 'motivo', $admin);
+        $this->fail('Se esperaba ValidationException');
+    } catch (ValidationException $exception) {
+        $mensaje = $exception->errors()['orden'][0];
+        expect($mensaje)->toContain('No se puede anular automáticamente')
+            ->toContain('Requiere revisión manual')
+            ->toContain('La entrega permanece registrada.');
+    }
+});
+
+/**
+ * El guard de estado (entregado + finanzas_generadas) siempre se evalúa
+ * antes que el guard de lote-ya-anulado: en el flujo real, anular restaura
+ * el estado previo a "entregado", así que una segunda anulación normal
+ * siempre topa primero con el guard de estado, no con éste. Este test aísla
+ * directamente el guard de lote-ya-anulado (forzando el estado de vuelta a
+ * "entregado" tras la primera anulación) para verificar su mensaje exacto.
+ */
+test('J3: una entrega ya anulada da el mensaje exacto de la FASE J', function () {
+    ['orden' => $orden] = escenarioAnulacionEntrega();
+    $actor = adminAnulacion();
+
+    app(AnularEntregaOrdenServicio::class)->ejecutar($orden, 'primera anulación', $actor);
+
+    $orden->fresh()->update(['estado' => 'entregado', 'finanzas_generadas' => true]);
+
+    expect(fn () => app(AnularEntregaOrdenServicio::class)->ejecutar($orden->fresh(), 'segunda anulación', $actor))
+        ->toThrow(ValidationException::class, 'Esta entrega ya fue anulada.');
+});
+
 test('socio logistico y socio tecnico reciben 403 al anular una entrega', function () {
     ['orden' => $orden] = escenarioAnulacionEntrega();
     $logistico = User::factory()->create(['role' => 'socio_logistico', 'email_verified_at' => now()]);
@@ -225,7 +301,7 @@ test('el motivo de la anulación es obligatorio vía HTTP', function () {
 
     $this->actingAs($admin)
         ->post(route('admin.ordenes-servicio.anular-entrega.store', $orden), [])
-        ->assertSessionHasErrors('motivo');
+        ->assertSessionHasErrors(['motivo' => 'El motivo es obligatorio para registrar este ajuste.']);
 
     expect(AjusteFinancieroOrden::count())->toBe(0);
 });
@@ -304,7 +380,8 @@ test('el detalle de la orden muestra el mensaje seguro cuando la entrega es hist
     $this->actingAs($admin)
         ->get(route('admin.ordenes-servicio.show', $orden))
         ->assertOk()
-        ->assertSee('requiere revisión manual')
+        ->assertSee('Requiere revisión manual')
+        ->assertSee('La entrega permanece registrada')
         ->assertDontSee('Esta entrega fue un error');
 });
 
