@@ -31,8 +31,24 @@ class PoliticaCostosOrdenServicio
         return self::esLegacy($modeloFinanciero) ? ($costoTecnico ?? 0.0) : 0.0;
     }
 
+    /**
+     * comision_recepcion sólo es un requisito real cuando el equipo fue
+     * dejado/recibido en sucursal: ahí NULL significa "pendiente de
+     * confirmar" y bloquea la entrega. En domicilio (o recepción "directa",
+     * sin trámite físico de sucursal) no hay comisión de sucursal que
+     * confirmar, así que NULL no es un dato faltante -- comisionAplicable()
+     * ya trata NULL como 0 sin necesitar un snapshot artificial. Legacy no
+     * usa comision_recepcion en absoluto (usa comision_logistica), así que
+     * nunca la requiere.
+     */
+    public static function requiereComisionRecepcion(string $modeloFinanciero, string $tipoRecepcion): bool
+    {
+        return ! self::esLegacy($modeloFinanciero) && $tipoRecepcion === 'sucursal';
+    }
+
     public static function costosIncompletos(
         string $modeloFinanciero,
+        string $tipoRecepcion,
         bool $tienePartnerTecnico,
         ?float $costoTecnico,
         ?float $comisionRecepcion,
@@ -43,7 +59,9 @@ class PoliticaCostosOrdenServicio
             return ($tienePartnerTecnico && $costoTecnico === null) || $hayServicioSinCosto || $hayRefaccionSinCosto;
         }
 
-        return $comisionRecepcion === null || $hayServicioSinCosto || $hayRefaccionSinCosto;
+        $comisionPendiente = self::requiereComisionRecepcion($modeloFinanciero, $tipoRecepcion) && $comisionRecepcion === null;
+
+        return $comisionPendiente || $hayServicioSinCosto || $hayRefaccionSinCosto;
     }
 
     /**

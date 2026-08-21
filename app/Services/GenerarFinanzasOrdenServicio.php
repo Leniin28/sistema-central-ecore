@@ -187,6 +187,7 @@ class GenerarFinanzasOrdenServicio
             'utilidad_neta' => $utilidad,
             'costos_incompletos' => PoliticaCostosOrdenServicio::costosIncompletos(
                 $orden->modelo_financiero,
+                $orden->tipo_recepcion,
                 $orden->partner_tecnico_id !== null,
                 $costoTecnicoNullable,
                 null,
@@ -286,6 +287,7 @@ class GenerarFinanzasOrdenServicio
             'utilidad_neta' => $utilidad,
             'costos_incompletos' => PoliticaCostosOrdenServicio::costosIncompletos(
                 $orden->modelo_financiero,
+                $orden->tipo_recepcion,
                 false,
                 null,
                 $comisionRecepcionNullable,

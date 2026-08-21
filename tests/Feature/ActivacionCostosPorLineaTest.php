@@ -109,6 +109,7 @@ test('OpenClaw crea orden costos_por_linea con comisión y costos NULL, queda in
             'cliente' => ['nombre' => 'Cliente OpenClaw activación'],
             'equipo' => ['tipo_equipo' => 'Laptop'],
             'recepcion' => ['falla_reportada' => 'No enciende'],
+            'tipo_recepcion' => 'sucursal',
             'external_id' => 'openclaw-activacion-1',
         ]);
     $response->assertCreated();

@@ -132,14 +132,21 @@
             @enderror
         </div>
 
-        <div>
+        @php
+            $comisionEsRequisitoReal = $orden->exists && $orden->usaCostosPorLinea() && old('tipo_recepcion', $orden->tipo_recepcion) === 'sucursal';
+        @endphp
+        <div data-comision-recepcion-wrapper data-requiere-sucursal="{{ $orden->exists && $orden->usaCostosPorLinea() ? '1' : '0' }}">
             <label for="comision_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Comisión de recepción</label>
             <input id="comision_recepcion" name="comision_recepcion" type="number" min="0" max="99999999.99" step="0.01" value="{{ old('comision_recepcion', $orden->comision_recepcion) }}" class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
-            @if ($orden->exists && $orden->usaCostosPorLinea())
-                <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Vacío significa pendiente: es un requisito financiero real para poder entregar esta orden.</p>
-            @else
-                <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Vacío significa pendiente. Dato preparado; no es un costo activo de una orden legacy.</p>
-            @endif
+            <p data-comision-recepcion-hint-sucursal class="mt-1 text-xs text-neutral-500 dark:text-neutral-400" @style([ 'display: none' => ! $comisionEsRequisitoReal ])>
+                Vacío significa pendiente: es un requisito financiero real para poder entregar esta orden. $0 es una confirmación válida (comisión en cero); un importe mayor a cero también es válido.
+            </p>
+            <p data-comision-recepcion-hint-no-aplica class="mt-1 text-xs text-neutral-500 dark:text-neutral-400" @style([ 'display: none' => $comisionEsRequisitoReal ])>
+                No aplica: la comisión de recepción sólo se confirma cuando el equipo se recibió en sucursal. En domicilio no bloquea la entrega.
+            </p>
+            @unless ($orden->exists && $orden->usaCostosPorLinea())
+                <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Dato preparado; no es un costo activo de una orden legacy.</p>
+            @endunless
             @error('comision_recepcion')
                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
             @enderror
@@ -428,5 +435,19 @@
         form.addEventListener('input', calculate);
         Object.values(rowTypes).forEach(syncRows);
         calculate();
+
+        const tipoRecepcionSelect = form.querySelector('#tipo_recepcion');
+        const comisionWrapper = form.querySelector('[data-comision-recepcion-wrapper]');
+        if (tipoRecepcionSelect && comisionWrapper && comisionWrapper.dataset.requiereSucursal === '1') {
+            const hintSucursal = comisionWrapper.querySelector('[data-comision-recepcion-hint-sucursal]');
+            const hintNoAplica = comisionWrapper.querySelector('[data-comision-recepcion-hint-no-aplica]');
+            const syncComisionHint = () => {
+                const esSucursal = tipoRecepcionSelect.value === 'sucursal';
+                if (hintSucursal) hintSucursal.style.display = esSucursal ? '' : 'none';
+                if (hintNoAplica) hintNoAplica.style.display = esSucursal ? 'none' : '';
+            };
+            tipoRecepcionSelect.addEventListener('change', syncComisionHint);
+            syncComisionHint();
+        }
     });
 </script>

@@ -266,7 +266,7 @@ test('comision cero confirmada no crea movimiento', function () {
 });
 
 test('comision NULL bloquea antes de escribir ningun movimiento', function () {
-    $orden = ordenCostosPorLinea(['comision_recepcion' => null]);
+    $orden = ordenCostosPorLinea(['tipo_recepcion' => 'sucursal', 'comision_recepcion' => null]);
     agregarDetalleCPL($orden, precioUnitario: 300, costoUnitario: 100);
     app(RecalcularTotalesOrdenServicio::class)->ejecutar($orden);
 
@@ -451,7 +451,7 @@ test('legacy sigue generando finanzas exactamente como antes junto a costos_por_
 // --- 24-25: Transacción / finanzas_generadas solo tras éxito ----------------
 
 test('rollback transaccional: comision NULL detectada a mitad dejando la orden intacta', function () {
-    $orden = ordenCostosPorLinea(['comision_recepcion' => null]);
+    $orden = ordenCostosPorLinea(['tipo_recepcion' => 'sucursal', 'comision_recepcion' => null]);
     agregarDetalleCPL($orden, precioUnitario: 300, costoUnitario: 100);
     agregarRefaccionCPL($orden, precioUnitarioCliente: 200, costoUnitario: 50);
     app(RecalcularTotalesOrdenServicio::class)->ejecutar($orden);

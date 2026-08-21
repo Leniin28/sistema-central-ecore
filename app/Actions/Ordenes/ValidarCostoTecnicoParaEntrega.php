@@ -20,6 +20,7 @@ class ValidarCostoTecnicoParaEntrega
             // recálculo.
             $incompleto = PoliticaCostosOrdenServicio::costosIncompletos(
                 $orden->modelo_financiero,
+                $orden->tipo_recepcion,
                 tienePartnerTecnico: false,
                 costoTecnico: null,
                 comisionRecepcion: $comisionRecepcion,
@@ -28,9 +29,11 @@ class ValidarCostoTecnicoParaEntrega
             );
 
             if ($incompleto) {
-                throw new CostoTecnicoPendienteException(
-                    'Completa la comisión de recepción y los costos de servicios/refacciones antes de entregar la orden.',
-                );
+                $mensaje = PoliticaCostosOrdenServicio::requiereComisionRecepcion($orden->modelo_financiero, $orden->tipo_recepcion)
+                    ? 'Completa la comisión de recepción y los costos de servicios/refacciones antes de entregar la orden.'
+                    : 'Completa los costos de servicios/refacciones antes de entregar la orden.';
+
+                throw new CostoTecnicoPendienteException($mensaje);
             }
 
             return;

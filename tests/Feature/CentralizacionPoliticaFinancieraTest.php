@@ -158,7 +158,7 @@ test('costos_incompletos persistido en false no evita el bloqueo si la comision 
     // real de comisión es NULL (por ejemplo, una edición posterior que no
     // disparó el recálculo). El único movimiento tolerado antes de entregar
     // es el anticipo ya reconciliado con la cotización.
-    $orden->update(['comision_recepcion' => null, 'costos_incompletos' => false]);
+    $orden->update(['tipo_recepcion' => 'sucursal', 'comision_recepcion' => null, 'costos_incompletos' => false]);
     $conteoAntes = MovimientoFinanciero::where('orden_servicio_id', $orden->id)->count();
 
     expect(fn () => app(GenerarFinanzasOrdenServicio::class)->generar($orden->fresh()))
@@ -227,7 +227,7 @@ test('E2E ruta real: POST admin.ordenes-servicio.estado.store entrega una orden 
 test('E2E ruta real: comision_recepcion NULL con costos_incompletos stale en false se rechaza al entregar', function () {
     $contexto = contextoEntregaRealCPL();
     $orden = crearOrdenListaParaEntregaCPL($contexto);
-    $orden->update(['comision_recepcion' => null, 'costos_incompletos' => false]);
+    $orden->update(['tipo_recepcion' => 'sucursal', 'comision_recepcion' => null, 'costos_incompletos' => false]);
 
     $this->actingAs($contexto['admin'])
         ->from(route('admin.ordenes-servicio.show', $orden))

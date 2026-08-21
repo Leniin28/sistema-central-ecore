@@ -101,13 +101,26 @@
                 </div>
 
                 @if (auth()->user()->isAdmin())
+                    @php
+                        $comisionEsRequisitoReal = \App\Actions\Ordenes\PoliticaCostosOrdenServicio::requiereComisionRecepcion($orden->modelo_financiero, $orden->tipo_recepcion);
+                    @endphp
                     <div>
                         <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Comisión de recepción</dt>
-                        <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">{{ $orden->comision_recepcion === null ? 'Pendiente' : '$'.number_format($orden->comision_recepcion, 2) }}</dd>
-                        @if ($orden->usaCostosPorLinea())
+                        <dd class="mt-1 text-sm text-neutral-900 dark:text-neutral-100">
+                            @if ($orden->comision_recepcion !== null)
+                                ${{ number_format($orden->comision_recepcion, 2) }}
+                            @elseif ($comisionEsRequisitoReal)
+                                Pendiente
+                            @else
+                                No aplica
+                            @endif
+                        </dd>
+                        @if ($comisionEsRequisitoReal)
                             <p class="mt-1 text-xs {{ $orden->comision_recepcion === null ? 'text-amber-700 dark:text-amber-300' : 'text-neutral-500 dark:text-neutral-400' }}">
                                 {{ $orden->comision_recepcion === null ? 'Pendiente: requisito financiero real para poder entregar esta orden.' : 'Costo activo de esta orden.' }}
                             </p>
+                        @elseif ($orden->usaCostosPorLinea())
+                            <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">No aplica: la comisión de recepción sólo se confirma cuando el equipo se recibió en sucursal.</p>
                         @else
                             <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Dato preparado; no es un costo activo de esta orden legacy.</p>
                         @endif

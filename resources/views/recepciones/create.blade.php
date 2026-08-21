@@ -136,7 +136,7 @@
                         <div><label for="tipo_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tipo de recepción</label><select id="tipo_recepcion" name="orden[tipo_recepcion]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><option value="sucursal">Sucursal</option><option value="domicilio" @selected(old('orden.tipo_recepcion') === 'domicilio')>Domicilio</option><option value="directo" @selected(old('orden.tipo_recepcion') === 'directo')>Directo</option></select></div>
                         @if (auth()->user()->isAdmin())
                             <div><label for="partner_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Punto / socio de recepción (opcional)</label><select id="partner_recepcion" name="orden[partner_recepcion_id]" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><option value="" data-commission="">Sin partner</option>@foreach ($partnersRecepcion as $partner)<option value="{{ $partner->id }}" data-commission="{{ $partner->comision_fija }}" @selected((int) old('orden.partner_recepcion_id') === $partner->id)>{{ $partner->nombre }}</option>@endforeach</select></div>
-                            <div><label for="comision_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Comisión de recepción</label><input id="comision_recepcion" name="orden[comision_recepcion]" type="number" min="0" max="99999999.99" step="0.01" value="{{ old('orden.comision_recepcion') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Vacío significa pendiente. La sugerencia del partner es editable.</p>@error('orden.comision_recepcion') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror</div>
+                            <div><label for="comision_recepcion" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Comisión de recepción</label><input id="comision_recepcion" name="orden[comision_recepcion]" type="number" min="0" max="99999999.99" step="0.01" value="{{ old('orden.comision_recepcion') }}" class="mt-1 block w-full rounded-md border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900"><p id="comision_recepcion_hint" class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Vacío significa pendiente. La sugerencia del partner es editable.</p>@error('orden.comision_recepcion') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror</div>
                         @else
                             <div class="border-l-2 border-blue-500 pl-3 text-sm"><p class="text-neutral-500 dark:text-neutral-400">Partner logístico</p><p class="font-medium text-neutral-950 dark:text-white">{{ auth()->user()->partner?->nombre ?? 'Sin partner asignado' }}</p></div>
                         @endif
@@ -209,6 +209,17 @@
             const money = value => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value || 0);
             const commissionInput = document.getElementById('comision_recepcion');
             let commissionTouched = commissionInput?.value !== '';
+            const commissionHint = document.getElementById('comision_recepcion_hint');
+            const tipoRecepcionSelect = document.getElementById('tipo_recepcion');
+
+            const syncCommissionHint = () => {
+                if (!commissionHint || !tipoRecepcionSelect) return;
+                commissionHint.textContent = tipoRecepcionSelect.value === 'sucursal'
+                    ? 'Vacío significa pendiente: es un requisito financiero real para poder entregar esta orden. $0 es una confirmación válida. La sugerencia del partner es editable.'
+                    : 'No aplica: la comisión de recepción sólo se confirma cuando el equipo se recibió en sucursal.';
+            };
+            tipoRecepcionSelect?.addEventListener('change', syncCommissionHint);
+            syncCommissionHint();
 
             const syncModes = () => {
                 ['cliente', 'equipo'].forEach(group => {

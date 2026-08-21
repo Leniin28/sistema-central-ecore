@@ -222,6 +222,7 @@ class CorregirCostoInternoOrdenEntregada
             'utilidad_neta' => $utilidad,
             'costos_incompletos' => PoliticaCostosOrdenServicio::costosIncompletos(
                 $orden->modelo_financiero,
+                $orden->tipo_recepcion,
                 $orden->partner_tecnico_id !== null,
                 $costoTecnico,
                 $comisionRecepcion,

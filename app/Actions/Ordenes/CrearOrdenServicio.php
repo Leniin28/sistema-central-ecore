@@ -81,6 +81,7 @@ class CrearOrdenServicio
                 tienePartnerTecnico: ! empty($data['partner_tecnico_id']),
                 modeloFinanciero: $modeloFinanciero,
                 comisionRecepcion: isset($data['comision_recepcion']) ? (float) $data['comision_recepcion'] : null,
+                tipoRecepcion: (string) $data['tipo_recepcion'],
             );
             $orden->update([
                 'total_cliente' => $resumen['total_cliente'],

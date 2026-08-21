@@ -20,6 +20,7 @@ class RecalcularTotalesOrdenServicio
 
         $costosIncompletos = PoliticaCostosOrdenServicio::costosIncompletos(
             $orden->modelo_financiero,
+            $orden->tipo_recepcion,
             $orden->partner_tecnico_id !== null,
             $costoTecnico,
             $comisionRecepcion,

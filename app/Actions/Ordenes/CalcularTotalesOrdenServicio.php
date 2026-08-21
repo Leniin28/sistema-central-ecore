@@ -73,6 +73,7 @@ class CalcularTotalesOrdenServicio
         bool $tienePartnerTecnico = false,
         string $modeloFinanciero = OrdenServicio::MODELO_FINANCIERO_LEGACY,
         ?float $comisionRecepcion = null,
+        string $tipoRecepcion = 'directo',
     ): array {
         $detallesCalculados = collect($detalles)->map(fn (array $detalle): array => $this->detalle($detalle));
         $totalServicios = (float) $detallesCalculados->sum('subtotal');
@@ -86,6 +87,7 @@ class CalcularTotalesOrdenServicio
 
         $costosIncompletos = PoliticaCostosOrdenServicio::costosIncompletos(
             $modeloFinanciero,
+            $tipoRecepcion,
             $tienePartnerTecnico,
             $costoTecnico,
             $comisionRecepcion,

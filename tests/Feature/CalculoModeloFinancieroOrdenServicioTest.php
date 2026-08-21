@@ -130,6 +130,7 @@ test('costos_por_linea con comisión de recepción NULL queda incompleto', funct
     $tecnico = partnerTecnicoFixop();
     $orden = ordenCalculoFinanciero([
         'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_COSTOS_POR_LINEA,
+        'tipo_recepcion' => 'sucursal',
         'partner_tecnico_id' => $tecnico->id,
         'costo_tecnico' => null,
         'comision_logistica' => 999,
@@ -339,6 +340,7 @@ test('costos_por_linea no bloquea entrega por partner_tecnico_id con costo_tecni
 test('costos_por_linea bloquea entrega cuando quedan costos incompletos', function () {
     $orden = ordenCalculoFinanciero([
         'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_COSTOS_POR_LINEA,
+        'tipo_recepcion' => 'sucursal',
         'comision_recepcion' => null,
     ]);
     app(RecalcularTotalesOrdenServicio::class)->ejecutar($orden);
@@ -352,6 +354,7 @@ test('costos_por_linea bloquea entrega cuando quedan costos incompletos', functi
 test('en costos_por_linea comisión cero y comisión NULL producen resultados distintos', function () {
     $ordenCero = ordenCalculoFinanciero([
         'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_COSTOS_POR_LINEA,
+        'tipo_recepcion' => 'sucursal',
         'comision_recepcion' => 0,
     ]);
     agregarDetalleCalculo($ordenCero, precioUnitario: 100, costoUnitario: 0);
@@ -359,6 +362,7 @@ test('en costos_por_linea comisión cero y comisión NULL producen resultados di
 
     $ordenNull = ordenCalculoFinanciero([
         'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_COSTOS_POR_LINEA,
+        'tipo_recepcion' => 'sucursal',
         'comision_recepcion' => null,
     ]);
     agregarDetalleCalculo($ordenNull, precioUnitario: 100, costoUnitario: 0);
