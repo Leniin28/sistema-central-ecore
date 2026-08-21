@@ -306,7 +306,7 @@ test('la API de recepción no falla si la sucursal no existe: crea la orden con 
         ->and($orden->notas)->not->toContain('Sucursal Inexistente');
 });
 
-test('la API interna persiste nota explícita sin inferir partner y devuelve el snapshot interno', function () {
+test('la API interna persiste nota explícita sin inferir partner y no expone comision_recepcion', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
     crearPartnersLogisticos();
 
@@ -319,7 +319,7 @@ test('la API interna persiste nota explícita sin inferir partner y devuelve el 
     $response->assertCreated()
         ->assertJsonPath('partner_recepcion', null)
         ->assertJsonPath('nota_recepcion', 'Sucursal Alameda')
-        ->assertJsonPath('comision_recepcion', null);
+        ->assertJsonMissingPath('comision_recepcion');
 
     $orden = OrdenServicio::firstWhere('external_id', 'telegram-photo-nota-independiente');
     expect($orden->partner_recepcion_id)->toBeNull()
@@ -342,7 +342,21 @@ test('la API interna rechaza confirmar comisión de recepción', function () {
     expect(OrdenServicio::count())->toBe(0);
 });
 
-test('la idempotencia conserva nota y comisión pendiente de la recepción original', function () {
+test('la respuesta de recepción nunca incluye comision_recepcion', function () {
+    config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
+    crearPartnersLogisticos();
+
+    $response = $this->withToken('token-secreto-pruebas')
+        ->postJson('/api/internal/receptions', payloadRecepcionApi([
+            'partner_logistico' => 'Electrocom Alameda',
+            'external_id' => 'telegram-photo-sin-comision',
+        ]));
+
+    $response->assertCreated();
+    expect($response->json())->not->toHaveKey('comision_recepcion');
+});
+
+test('la idempotencia conserva nota de la recepción original y no expone comision_recepcion', function () {
     config(['services.openclaw.internal_api_token' => 'token-secreto-pruebas']);
 
     $payload = payloadRecepcionApi([
@@ -360,7 +374,7 @@ test('la idempotencia conserva nota y comisión pendiente de la recepción origi
     $segunda->assertOk()
         ->assertJsonPath('created', false)
         ->assertJsonPath('nota_recepcion', 'Punto inicial')
-        ->assertJsonPath('comision_recepcion', null);
+        ->assertJsonMissingPath('comision_recepcion');
 
     expect(OrdenServicio::count())->toBe(1)
         ->and(OrdenServicio::sole()->nota_recepcion)->toBe('Punto inicial');

@@ -127,7 +127,10 @@ class InternalReceptionController extends Controller
                 'id' => $orden->partnerRecepcion->id,
                 'nombre' => $orden->partnerRecepcion->nombre,
             ] : null,
-            'comision_recepcion' => $orden->comision_recepcion === null ? null : (float) $orden->comision_recepcion,
+            // comision_recepcion es un dato financiero interno administrado por
+            // ECore/admin: OpenClaw no puede fijarla (ver 'prohibited' arriba) ni
+            // tiene un consumidor documentado que la necesite, así que tampoco se
+            // devuelve (principio de mínimo privilegio).
             'nota_recepcion' => $orden->nota_recepcion,
             'total_cliente' => (float) $orden->total_cliente,
             'servicios_agregados' => $resultado['servicios_agregados'],
