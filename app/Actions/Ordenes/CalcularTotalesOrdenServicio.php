@@ -92,8 +92,6 @@ class CalcularTotalesOrdenServicio
             $detallesCalculados->contains(fn (array $detalle): bool => $detalle['costo_total'] === null),
             $refaccionesCalculadas->contains(fn (array $refaccion): bool => $refaccion['costo_total'] === null),
         );
-        $comisionAplicable = PoliticaCostosOrdenServicio::comisionAplicable($modeloFinanciero, $comision, $comisionRecepcion);
-        $costoTecnicoAplicable = PoliticaCostosOrdenServicio::costoTecnicoAplicable($modeloFinanciero, $costoTecnico);
 
         return [
             'total_servicios' => round($totalServicios, 2),
@@ -102,7 +100,15 @@ class CalcularTotalesOrdenServicio
             'costo_refacciones' => round($costoRefacciones, 2),
             'total_cliente' => $totalCliente,
             'costo_total_interno' => round($costoServicios + $costoRefacciones, 2),
-            'utilidad_estimada' => round($totalCliente - $costoServicios - $costoRefacciones - $costoTecnicoAplicable - $comisionAplicable, 2),
+            'utilidad_estimada' => PoliticaCostosOrdenServicio::utilidad(
+                $modeloFinanciero,
+                $totalCliente,
+                $costoServicios,
+                $costoRefacciones,
+                $comision,
+                $comisionRecepcion,
+                $costoTecnico,
+            ),
             'costos_incompletos' => $costosIncompletos,
         ];
     }

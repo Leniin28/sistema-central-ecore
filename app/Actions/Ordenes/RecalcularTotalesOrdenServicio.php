@@ -26,22 +26,16 @@ class RecalcularTotalesOrdenServicio
             $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null),
             $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null),
         );
-        $comisionAplicable = PoliticaCostosOrdenServicio::comisionAplicable(
-            $orden->modelo_financiero,
-            (float) $orden->comision_logistica,
-            $comisionRecepcion,
-        );
-        $costoTecnicoAplicable = PoliticaCostosOrdenServicio::costoTecnicoAplicable($orden->modelo_financiero, $costoTecnico);
-
         $orden->update([
             'total_cliente' => $totalCliente,
-            'utilidad_estimada' => round(
-                $totalCliente
-                - $costoServicios
-                - $costoRefacciones
-                - $costoTecnicoAplicable
-                - $comisionAplicable,
-                2,
+            'utilidad_estimada' => PoliticaCostosOrdenServicio::utilidad(
+                $orden->modelo_financiero,
+                $totalCliente,
+                $costoServicios,
+                $costoRefacciones,
+                (float) $orden->comision_logistica,
+                $comisionRecepcion,
+                $costoTecnico,
             ),
             'costos_incompletos' => $costosIncompletos,
         ]);

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Actions\Cotizaciones\RegistrarAnticipoCotizacion;
+use App\Actions\Ordenes\PoliticaCostosOrdenServicio;
 use App\Actions\Ordenes\ValidarCostoTecnicoParaEntrega;
 use App\Models\MovimientoFinanciero;
 use App\Models\OrdenServicio;
@@ -134,13 +135,29 @@ class GenerarFinanzasOrdenServicio
             );
         }
 
+        $costoTecnicoNullable = $orden->costo_tecnico === null ? null : (float) $orden->costo_tecnico;
+        $utilidad = PoliticaCostosOrdenServicio::utilidad(
+            $orden->modelo_financiero,
+            $totalCliente,
+            $totalCostoServicios,
+            $totalCostoRefacciones,
+            $comisionLogistica,
+            null,
+            $costoTecnicoNullable,
+        );
+
         $orden->update([
             'comision_logistica' => $comisionLogistica,
-            'utilidad_estimada' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
-            'utilidad_neta' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
-            'costos_incompletos' => $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)
-                || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null)
-                || ($orden->partner_tecnico_id !== null && $orden->costo_tecnico === null),
+            'utilidad_estimada' => $utilidad,
+            'utilidad_neta' => $utilidad,
+            'costos_incompletos' => PoliticaCostosOrdenServicio::costosIncompletos(
+                $orden->modelo_financiero,
+                $orden->partner_tecnico_id !== null,
+                $costoTecnicoNullable,
+                null,
+                $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null),
+                $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null),
+            ),
             'finanzas_generadas' => true,
         ]);
     }
@@ -152,8 +169,10 @@ class GenerarFinanzasOrdenServicio
      */
     private function generarCostosPorLinea(OrdenServicio $orden, float $saldo): void
     {
-        $this->validarReadinessCostosPorLinea($orden);
-
+        // La lectura completa de líneas/comisión ya ocurrió en generar()
+        // (ValidarCostoTecnicoParaEntrega recalcula sobre datos actuales, no
+        // sobre el booleano costos_incompletos persistido), así que a este
+        // punto no existe ninguna línea o comisión NULL sin detectar.
         if ($saldo > 0) {
             $this->crearMovimiento($orden, 'ingreso', 'reparacion', $saldo, null, 'Saldo de orden '.$orden->folio);
         }
@@ -196,7 +215,8 @@ class GenerarFinanzasOrdenServicio
             );
         }
 
-        $comisionRecepcion = (float) $orden->comision_recepcion;
+        $comisionRecepcionNullable = $orden->comision_recepcion === null ? null : (float) $orden->comision_recepcion;
+        $comisionRecepcion = $comisionRecepcionNullable ?? 0.0;
         if ($comisionRecepcion > 0) {
             $descripcion = 'Comisión de recepción por orden '.$orden->folio
                 .($orden->partnerRecepcion ? ' / '.$orden->partnerRecepcion->nombre : '')
@@ -213,35 +233,29 @@ class GenerarFinanzasOrdenServicio
         }
 
         $totalCliente = (float) $orden->total_cliente;
-        $utilidad = round($totalCliente - $totalCostoServicios - $totalCostoRefacciones - $comisionRecepcion, 2);
+        $utilidad = PoliticaCostosOrdenServicio::utilidad(
+            $orden->modelo_financiero,
+            $totalCliente,
+            $totalCostoServicios,
+            $totalCostoRefacciones,
+            0.0,
+            $comisionRecepcionNullable,
+            null,
+        );
 
         $orden->update([
             'utilidad_estimada' => $utilidad,
             'utilidad_neta' => $utilidad,
-            'costos_incompletos' => false,
+            'costos_incompletos' => PoliticaCostosOrdenServicio::costosIncompletos(
+                $orden->modelo_financiero,
+                false,
+                null,
+                $comisionRecepcionNullable,
+                $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null),
+                $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null),
+            ),
             'finanzas_generadas' => true,
         ]);
-    }
-
-    private function validarReadinessCostosPorLinea(OrdenServicio $orden): void
-    {
-        if ($orden->comision_recepcion === null) {
-            throw ValidationException::withMessages([
-                'estado_nuevo' => 'Confirma la comisión de recepción antes de entregar la orden.',
-            ]);
-        }
-
-        if ($orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)) {
-            throw ValidationException::withMessages([
-                'estado_nuevo' => 'Completa el costo interno de todos los servicios antes de entregar la orden.',
-            ]);
-        }
-
-        if ($orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null)) {
-            throw ValidationException::withMessages([
-                'estado_nuevo' => 'Completa el costo interno de todas las refacciones antes de entregar la orden.',
-            ]);
-        }
     }
 
     private function crearMovimiento(
