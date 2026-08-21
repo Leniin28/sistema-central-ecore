@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Finanzas\AnularEntregaOrdenServicio;
 use App\Actions\Finanzas\CorregirComisionOrdenEntregada;
 use App\Actions\Finanzas\CorregirCostoInternoOrdenEntregada;
 use App\Actions\Finanzas\RegistrarReembolsoOrdenServicio;
@@ -101,5 +102,25 @@ class OrdenServicioAjusteController extends Controller
         return redirect()
             ->route('admin.ordenes-servicio.show', $ordenServicio)
             ->with('status', 'Comisión corregida correctamente.');
+    }
+
+    public function anularEntrega(
+        Request $request,
+        OrdenServicio $ordenServicio,
+        AnularEntregaOrdenServicio $accion,
+    ): RedirectResponse {
+        $data = $request->validate([
+            'motivo' => ['required', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $accion->ejecutar($ordenServicio, $data['motivo'], $request->user());
+        } catch (ValidationException $exception) {
+            return back()->withErrors($exception->errors())->withInput();
+        }
+
+        return redirect()
+            ->route('admin.ordenes-servicio.show', $ordenServicio)
+            ->with('status', 'Entrega anulada correctamente. La orden volvió a su estado anterior.');
     }
 }

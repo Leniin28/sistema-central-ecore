@@ -52,6 +52,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('ordenes-servicio.costo-interno.store');
         Route::post('ordenes-servicio/{ordenServicio}/comision', [OrdenServicioAjusteController::class, 'comision'])
             ->name('ordenes-servicio.comision.store');
+        Route::post('ordenes-servicio/{ordenServicio}/anular-entrega', [OrdenServicioAjusteController::class, 'anularEntrega'])
+            ->name('ordenes-servicio.anular-entrega.store');
         Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion', [OrdenServicioController::class, 'notaRecepcion'])
             ->name('ordenes-servicio.nota-recepcion');
         Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion/pdf', [OrdenServicioController::class, 'notaRecepcionPdf'])

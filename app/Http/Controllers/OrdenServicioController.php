@@ -8,6 +8,7 @@ use App\Actions\Ordenes\ActualizarOrdenServicio;
 use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cliente;
 use App\Models\Equipo;
+use App\Models\GeneracionFinancieraOrden;
 use App\Models\OrdenServicio;
 use App\Models\Partner;
 use App\Models\Servicio;
@@ -86,6 +87,9 @@ class OrdenServicioController extends Controller
             'estadosDisponibles' => $this->estadosDisponibles($ordenServicio),
             'puedeCrearCotizacion' => auth()->user()->isAdmin()
                 && $vincularOrden->esElegibleParaNuevaCotizacion($ordenServicio),
+            'tieneLoteEntrega' => $ordenServicio->generacionesFinancieras()
+                ->where('tipo', GeneracionFinancieraOrden::TIPO_ENTREGA)
+                ->exists(),
         ]);
     }
 

@@ -5,6 +5,12 @@
             Correcciones sobre una orden ya entregada. Ninguna acción aquí borra o edita un movimiento original: cada una crea un movimiento compensatorio con motivo y actor registrados.
         </p>
 
+        @if ($errors->has('orden'))
+            <div class="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+                {{ $errors->first('orden') }}
+            </div>
+        @endif
+
         <dl class="grid gap-4 sm:grid-cols-3">
             <div>
                 <dt class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Venta bruta</dt>
@@ -147,6 +153,35 @@
                 </div>
             </form>
         </details>
+
+        <div class="rounded-md border border-red-200 p-3 dark:border-red-900">
+            <p class="text-sm font-medium text-red-800 dark:text-red-300">Anular entrega por error</p>
+            @if (! $tieneLoteEntrega)
+                <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                    Esta entrega es anterior a la trazabilidad necesaria y requiere revisión manual. No se puede anular desde aquí.
+                </p>
+            @else
+                <details class="mt-2">
+                    <summary class="cursor-pointer text-sm font-medium text-red-700 hover:underline dark:text-red-300">Esta entrega fue un error (equipo/pago no ocurrieron realmente)</summary>
+                    <form method="POST" action="{{ route('admin.ordenes-servicio.anular-entrega.store', $orden) }}" class="mt-3 flex flex-col gap-3">
+                        @csrf
+                        <p class="text-xs text-neutral-600 dark:text-neutral-400">
+                            Se compensarán todos los movimientos de esta entrega (nunca se borran ni editan), la orden volverá a su estado anterior a "Entregado" y se podrá volver a entregar normalmente. Los anticipos previos a esta entrega no se ven afectados.
+                        </p>
+                        <div>
+                            <label for="anular_motivo" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Motivo (obligatorio)</label>
+                            <textarea id="anular_motivo" name="motivo" rows="2" required class="mt-1 block w-full rounded-md border-neutral-300 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"></textarea>
+                            @error('motivo')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <button type="submit" class="self-start rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950">
+                            Confirmar anulación de entrega
+                        </button>
+                    </form>
+                </details>
+            @endif
+        </div>
 
         @if ($orden->ajustesFinancieros->isNotEmpty())
             <div class="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
