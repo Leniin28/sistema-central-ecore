@@ -38,6 +38,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('movimientos-financieros.index');
         Route::post('ordenes-servicio/{ordenServicio}/estado', [OrdenServicioEstadoController::class, 'store'])
             ->name('ordenes-servicio.estado.store');
+        Route::patch('ordenes-servicio/{ordenServicio}/costos', [OrdenServicioController::class, 'actualizarCostos'])
+            ->name('ordenes-servicio.costos.update');
         Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion', [OrdenServicioController::class, 'notaRecepcion'])
             ->name('ordenes-servicio.nota-recepcion');
         Route::get('ordenes-servicio/{ordenServicio}/nota-recepcion/pdf', [OrdenServicioController::class, 'notaRecepcionPdf'])

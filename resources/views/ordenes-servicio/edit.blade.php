@@ -11,5 +11,7 @@
                 @include('ordenes-servicio._form')
             </form>
         </section>
+
+        @include('ordenes-servicio._costos-form')
     </div>
 </x-layouts::app>

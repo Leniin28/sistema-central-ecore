@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Cotizaciones\VincularCotizacionAOrden;
+use App\Actions\Ordenes\ActualizarCostosInternosOrdenServicio;
 use App\Actions\Ordenes\ActualizarOrdenServicio;
 use App\Actions\Ordenes\CrearOrdenServicio;
 use App\Models\Cliente;
@@ -160,6 +161,32 @@ class OrdenServicioController extends Controller
         return redirect()
             ->route('admin.ordenes-servicio.show', $orden)
             ->with('status', 'Orden actualizada correctamente.');
+    }
+
+    public function actualizarCostos(
+        Request $request,
+        OrdenServicio $ordenServicio,
+        ActualizarCostosInternosOrdenServicio $actualizarCostos,
+    ): RedirectResponse {
+        abort_unless($request->user()->isAdmin(), 403);
+        $data = $request->validate([
+            'costos_servicios' => ['sometimes', 'array'],
+            'costos_servicios.*.id' => ['required', 'integer', 'distinct'],
+            'costos_servicios.*.costo_unitario' => ['nullable', 'numeric', 'min:0'],
+            'costos_refacciones' => ['sometimes', 'array'],
+            'costos_refacciones.*.id' => ['required', 'integer', 'distinct'],
+            'costos_refacciones.*.costo_unitario' => ['nullable', 'numeric', 'min:0'],
+        ]);
+        $orden = $actualizarCostos->ejecutar(
+            $ordenServicio,
+            $data['costos_servicios'] ?? [],
+            $data['costos_refacciones'] ?? [],
+            $request->user(),
+        );
+
+        return redirect()
+            ->route('admin.ordenes-servicio.show', $orden)
+            ->with('status', 'Costos internos actualizados correctamente.');
     }
 
     public function destroy(OrdenServicio $ordenServicio): RedirectResponse
