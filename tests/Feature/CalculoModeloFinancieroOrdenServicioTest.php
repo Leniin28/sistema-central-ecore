@@ -11,7 +11,6 @@ use App\Models\Partner;
 use App\Models\User;
 use App\Services\GenerarFinanzasOrdenServicio;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Validation\ValidationException;
 
 uses(RefreshDatabase::class);
 
@@ -279,20 +278,22 @@ test('CalcularTotalesOrdenServicio y RecalcularTotalesOrdenServicio coinciden en
         ->and($resumen['costos_incompletos'])->toBeFalse();
 });
 
-// --- GenerarFinanzasOrdenServicio: fail-closed para el modelo nuevo ---------
+// --- GenerarFinanzasOrdenServicio: costos_por_linea genera finanzas --------
+// Cobertura detallada en GenerarFinanzasCostosPorLineaTest.php; aquí solo se
+// confirma que el fail-closed temporal de FASE C ya no aplica.
 
-test('GenerarFinanzasOrdenServicio rechaza fail-closed una orden costos_por_linea', function () {
+test('GenerarFinanzasOrdenServicio ya genera finanzas para costos_por_linea', function () {
     $orden = ordenCalculoFinanciero([
         'modelo_financiero' => OrdenServicio::MODELO_FINANCIERO_COSTOS_POR_LINEA,
         'comision_recepcion' => 50,
     ]);
     agregarDetalleCalculo($orden, precioUnitario: 800, costoUnitario: 200);
+    app(RecalcularTotalesOrdenServicio::class)->ejecutar($orden);
 
-    expect(fn () => app(GenerarFinanzasOrdenServicio::class)->generar($orden))
-        ->toThrow(ValidationException::class);
+    app(GenerarFinanzasOrdenServicio::class)->generar($orden->fresh());
 
-    expect($orden->fresh()->finanzas_generadas)->toBeFalse()
-        ->and(MovimientoFinanciero::where('orden_servicio_id', $orden->id)->count())->toBe(0);
+    expect($orden->fresh()->finanzas_generadas)->toBeTrue()
+        ->and(MovimientoFinanciero::where('orden_servicio_id', $orden->id)->where('categoria', 'servicio')->exists())->toBeTrue();
 });
 
 test('legacy sigue generando finanzas exactamente como antes', function () {

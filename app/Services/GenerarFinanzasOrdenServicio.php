@@ -11,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class GenerarFinanzasOrdenServicio
 {
+    public const CATEGORIA_COMISION_RECEPCION = 'comision_recepcion';
+
     public function __construct(private ValidarCostoTecnicoParaEntrega $validarCostoTecnico) {}
 
     public function generar(OrdenServicio $orden): void
@@ -26,12 +28,6 @@ class GenerarFinanzasOrdenServicio
 
             if ($orden->finanzas_generadas) {
                 return;
-            }
-
-            if ($orden->usaCostosPorLinea()) {
-                throw ValidationException::withMessages([
-                    'estado_nuevo' => 'El modelo financiero costos_por_linea todavía no puede generar finanzas. Esta capacidad se habilitará en una fase posterior.',
-                ]);
             }
 
             $this->validarCostoTecnico->ejecutar($orden);
@@ -51,10 +47,6 @@ class GenerarFinanzasOrdenServicio
 
             $orden->loadMissing(['cotizacion', 'partnerRecepcion', 'partnerTecnico', 'detalles', 'refacciones']);
             $totalCliente = (float) $orden->total_cliente;
-            $comisionLogistica = (float) ($orden->partnerRecepcion?->comision_fija ?? 0);
-            $costoTecnico = (float) ($orden->costo_tecnico ?? 0);
-            $totalCostoRefacciones = (float) $orden->refacciones->sum('costo_total');
-            $totalCostoServicios = (float) $orden->detalles->sum('costo_total');
             $totalAnticipos = round((float) $movimientosExistentes->sum('monto'), 2);
             $saldo = round($totalCliente - $totalAnticipos, 2);
 
@@ -71,71 +63,185 @@ class GenerarFinanzasOrdenServicio
                 ]);
             }
 
-            if ($saldo > 0) {
-                $this->crearMovimiento($orden, 'ingreso', 'reparacion', $saldo, null, 'Saldo de orden '.$orden->folio);
+            if ($orden->usaCostosPorLinea()) {
+                $this->generarCostosPorLinea($orden, $saldo);
+            } else {
+                $this->generarLegacy($orden, $saldo);
             }
-
-            if ($orden->partner_recepcion_id && $comisionLogistica > 0) {
-                $this->crearMovimiento(
-                    $orden,
-                    'egreso',
-                    'pago_socio_logistico',
-                    $comisionLogistica,
-                    $orden->partner_recepcion_id,
-                    'Comisión logística por orden '.$orden->folio,
-                );
-            }
-
-            if ($orden->partner_tecnico_id && $costoTecnico > 0) {
-                $this->crearMovimiento(
-                    $orden,
-                    'egreso',
-                    'pago_socio_tecnico',
-                    $costoTecnico,
-                    $orden->partner_tecnico_id,
-                    'Pago técnico por orden '.$orden->folio,
-                );
-            }
-
-            foreach ($orden->refacciones as $refaccion) {
-                if ($refaccion->costo_total === null || (float) $refaccion->costo_total <= 0) {
-                    continue;
-                }
-                $this->crearMovimiento(
-                    $orden,
-                    'egreso',
-                    'refaccion',
-                    (float) $refaccion->costo_total,
-                    null,
-                    'Compra de refacción '.$refaccion->descripcion.' para orden '.$orden->folio,
-                );
-            }
-
-            foreach ($orden->detalles as $detalle) {
-                if ($detalle->costo_total === null || (float) $detalle->costo_total <= 0) {
-                    continue;
-                }
-
-                $this->crearMovimiento(
-                    $orden,
-                    'egreso',
-                    'servicio',
-                    (float) $detalle->costo_total,
-                    null,
-                    'Costo interno de servicio '.$detalle->descripcion.' para orden '.$orden->folio,
-                );
-            }
-
-            $orden->update([
-                'comision_logistica' => $comisionLogistica,
-                'utilidad_estimada' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
-                'utilidad_neta' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
-                'costos_incompletos' => $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)
-                    || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null)
-                    || ($orden->partner_tecnico_id !== null && $orden->costo_tecnico === null),
-                'finanzas_generadas' => true,
-            ]);
         });
+    }
+
+    private function generarLegacy(OrdenServicio $orden, float $saldo): void
+    {
+        $totalCliente = (float) $orden->total_cliente;
+        $comisionLogistica = (float) ($orden->partnerRecepcion?->comision_fija ?? 0);
+        $costoTecnico = (float) ($orden->costo_tecnico ?? 0);
+        $totalCostoRefacciones = (float) $orden->refacciones->sum('costo_total');
+        $totalCostoServicios = (float) $orden->detalles->sum('costo_total');
+
+        if ($saldo > 0) {
+            $this->crearMovimiento($orden, 'ingreso', 'reparacion', $saldo, null, 'Saldo de orden '.$orden->folio);
+        }
+
+        if ($orden->partner_recepcion_id && $comisionLogistica > 0) {
+            $this->crearMovimiento(
+                $orden,
+                'egreso',
+                'pago_socio_logistico',
+                $comisionLogistica,
+                $orden->partner_recepcion_id,
+                'Comisión logística por orden '.$orden->folio,
+            );
+        }
+
+        if ($orden->partner_tecnico_id && $costoTecnico > 0) {
+            $this->crearMovimiento(
+                $orden,
+                'egreso',
+                'pago_socio_tecnico',
+                $costoTecnico,
+                $orden->partner_tecnico_id,
+                'Pago técnico por orden '.$orden->folio,
+            );
+        }
+
+        foreach ($orden->refacciones as $refaccion) {
+            if ($refaccion->costo_total === null || (float) $refaccion->costo_total <= 0) {
+                continue;
+            }
+            $this->crearMovimiento(
+                $orden,
+                'egreso',
+                'refaccion',
+                (float) $refaccion->costo_total,
+                null,
+                'Compra de refacción '.$refaccion->descripcion.' para orden '.$orden->folio,
+            );
+        }
+
+        foreach ($orden->detalles as $detalle) {
+            if ($detalle->costo_total === null || (float) $detalle->costo_total <= 0) {
+                continue;
+            }
+
+            $this->crearMovimiento(
+                $orden,
+                'egreso',
+                'servicio',
+                (float) $detalle->costo_total,
+                null,
+                'Costo interno de servicio '.$detalle->descripcion.' para orden '.$orden->folio,
+            );
+        }
+
+        $orden->update([
+            'comision_logistica' => $comisionLogistica,
+            'utilidad_estimada' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
+            'utilidad_neta' => $totalCliente - $comisionLogistica - $costoTecnico - $totalCostoServicios - $totalCostoRefacciones,
+            'costos_incompletos' => $orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)
+                || $orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null)
+                || ($orden->partner_tecnico_id !== null && $orden->costo_tecnico === null),
+            'finanzas_generadas' => true,
+        ]);
+    }
+
+    /**
+     * costos_por_linea: solo los costos internos capturados por línea y la comisión
+     * de recepción restan a la utilidad. costo_tecnico y comision_logistica se
+     * ignoran por completo — no generan pago_socio_tecnico ni pago_socio_logistico.
+     */
+    private function generarCostosPorLinea(OrdenServicio $orden, float $saldo): void
+    {
+        $this->validarReadinessCostosPorLinea($orden);
+
+        if ($saldo > 0) {
+            $this->crearMovimiento($orden, 'ingreso', 'reparacion', $saldo, null, 'Saldo de orden '.$orden->folio);
+        }
+
+        $totalCostoServicios = 0.0;
+        foreach ($orden->detalles as $detalle) {
+            $costoTotal = (float) $detalle->costo_total;
+            $totalCostoServicios += $costoTotal;
+
+            if ($costoTotal <= 0) {
+                continue;
+            }
+
+            $this->crearMovimiento(
+                $orden,
+                'egreso',
+                'servicio',
+                $costoTotal,
+                null,
+                'Costo interno de servicio '.$detalle->descripcion.' para orden '.$orden->folio,
+            );
+        }
+
+        $totalCostoRefacciones = 0.0;
+        foreach ($orden->refacciones as $refaccion) {
+            $costoTotal = (float) $refaccion->costo_total;
+            $totalCostoRefacciones += $costoTotal;
+
+            if ($costoTotal <= 0) {
+                continue;
+            }
+
+            $this->crearMovimiento(
+                $orden,
+                'egreso',
+                'refaccion',
+                $costoTotal,
+                null,
+                'Compra de refacción '.$refaccion->descripcion.' para orden '.$orden->folio,
+            );
+        }
+
+        $comisionRecepcion = (float) $orden->comision_recepcion;
+        if ($comisionRecepcion > 0) {
+            $descripcion = 'Comisión de recepción por orden '.$orden->folio
+                .($orden->partnerRecepcion ? ' / '.$orden->partnerRecepcion->nombre : '')
+                .($orden->nota_recepcion ? ' ('.$orden->nota_recepcion.')' : '');
+
+            $this->crearMovimiento(
+                $orden,
+                'egreso',
+                self::CATEGORIA_COMISION_RECEPCION,
+                $comisionRecepcion,
+                $orden->partner_recepcion_id,
+                $descripcion,
+            );
+        }
+
+        $totalCliente = (float) $orden->total_cliente;
+        $utilidad = round($totalCliente - $totalCostoServicios - $totalCostoRefacciones - $comisionRecepcion, 2);
+
+        $orden->update([
+            'utilidad_estimada' => $utilidad,
+            'utilidad_neta' => $utilidad,
+            'costos_incompletos' => false,
+            'finanzas_generadas' => true,
+        ]);
+    }
+
+    private function validarReadinessCostosPorLinea(OrdenServicio $orden): void
+    {
+        if ($orden->comision_recepcion === null) {
+            throw ValidationException::withMessages([
+                'estado_nuevo' => 'Confirma la comisión de recepción antes de entregar la orden.',
+            ]);
+        }
+
+        if ($orden->detalles->contains(fn ($detalle): bool => $detalle->costo_total === null)) {
+            throw ValidationException::withMessages([
+                'estado_nuevo' => 'Completa el costo interno de todos los servicios antes de entregar la orden.',
+            ]);
+        }
+
+        if ($orden->refacciones->contains(fn ($refaccion): bool => $refaccion->costo_total === null)) {
+            throw ValidationException::withMessages([
+                'estado_nuevo' => 'Completa el costo interno de todas las refacciones antes de entregar la orden.',
+            ]);
+        }
     }
 
     private function crearMovimiento(

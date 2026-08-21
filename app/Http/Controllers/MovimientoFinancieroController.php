@@ -65,7 +65,7 @@ class MovimientoFinancieroController extends Controller
 
         return view('movimientos-financieros.index', [
             'movimientos' => $movimientos,
-            'categorias' => [...self::CATEGORIAS, 'anticipo'],
+            'categorias' => [...self::CATEGORIAS, 'anticipo', 'comision_recepcion'],
             'filters' => $filters,
             'totalIngresos' => $totalIngresos,
             'totalEgresos' => $totalEgresos,

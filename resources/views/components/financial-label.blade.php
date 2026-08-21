@@ -15,6 +15,7 @@
         'inversion_publicitaria' => 'Inversión publicitaria',
         'refaccion' => 'Refacción',
         'servicio' => 'Costo de servicio',
+        'comision_recepcion' => 'Comisión de recepción',
         'gasto_operativo' => 'Gasto operativo',
         'gasolina' => 'Gasolina',
         'transporte' => 'Transporte',
