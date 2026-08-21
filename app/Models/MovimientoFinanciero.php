@@ -21,6 +21,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'movimiento_original_id',
     'motivo_reversion',
     'revertido_por_user_id',
+    'generacion_financiera_orden_id',
+    'ajuste_financiero_orden_id',
 ])]
 class MovimientoFinanciero extends Model
 {
@@ -98,6 +100,27 @@ class MovimientoFinanciero extends Model
     public function esReversion(): bool
     {
         return $this->movimiento_original_id !== null;
+    }
+
+    /**
+     * The delivery-generation lote (FASE H.2) this movement belongs to, when
+     * it was created by GenerarFinanzasOrdenServicio. Never anticipos, which
+     * are created before any lote exists.
+     */
+    public function generacionFinanciera(): BelongsTo
+    {
+        return $this->belongsTo(GeneracionFinancieraOrden::class, 'generacion_financiera_orden_id');
+    }
+
+    /**
+     * The adjustment event (FASE H.1: reembolso/corrección/anulación) that
+     * created this movement as a compensating entry, when applicable. Kept
+     * separate from movimiento_original_id, which is only V1's manual
+     * single-movement reversal.
+     */
+    public function ajusteFinanciero(): BelongsTo
+    {
+        return $this->belongsTo(AjusteFinancieroOrden::class, 'ajuste_financiero_orden_id');
     }
 
     /**

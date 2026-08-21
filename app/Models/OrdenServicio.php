@@ -212,6 +212,50 @@ class OrdenServicio extends Model
         return $this->hasMany(MovimientoFinanciero::class);
     }
 
+    /** Delivery-generation lotes (FASE H.2): one per GenerarFinanzasOrdenServicio run. */
+    public function generacionesFinancieras(): HasMany
+    {
+        return $this->hasMany(GeneracionFinancieraOrden::class);
+    }
+
+    /** Post-delivery adjustment events (FASE H.1): reembolsos, correcciones, anulaciones. */
+    public function ajustesFinancieros(): HasMany
+    {
+        return $this->hasMany(AjusteFinancieroOrden::class);
+    }
+
+    /** Gross sale of a delivered order, unaffected by later refunds. */
+    public function ventaBruta(): float
+    {
+        return (float) $this->total_cliente;
+    }
+
+    /** Structured sum of all reembolso_cliente adjustments registered for this order. */
+    public function totalReembolsado(): float
+    {
+        return (float) $this->ajustesFinancieros()
+            ->where('tipo', AjusteFinancieroOrden::TIPO_REEMBOLSO_CLIENTE)
+            ->sum('delta');
+    }
+
+    /** Net sale after refunds, never negative. */
+    public function ventaNeta(): float
+    {
+        return max(round($this->ventaBruta() - $this->totalReembolsado(), 2), 0.0);
+    }
+
+    /** Derived refund status: 'sin_reembolso' | 'reembolso_parcial' | 'reembolso_total'. */
+    public function estadoReembolso(): string
+    {
+        $reembolsado = $this->totalReembolsado();
+
+        if ($reembolsado <= 0.0) {
+            return 'sin_reembolso';
+        }
+
+        return $reembolsado >= $this->ventaBruta() ? 'reembolso_total' : 'reembolso_parcial';
+    }
+
     /** Determine whether an open quoted order has movements other than its own advances. */
     public function tieneMovimientosFinancierosIncompatibles(?int $cotizacionId = null): bool
     {

@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Actions\Cotizaciones\RegistrarAnticipoCotizacion;
 use App\Actions\Ordenes\PoliticaCostosOrdenServicio;
 use App\Actions\Ordenes\ValidarCostoTecnicoParaEntrega;
+use App\Models\AjusteFinancieroOrden;
+use App\Models\GeneracionFinancieraOrden;
 use App\Models\MovimientoFinanciero;
 use App\Models\OrdenServicio;
 use Illuminate\Support\Facades\DB;
@@ -34,11 +36,25 @@ class GenerarFinanzasOrdenServicio
             $this->validarCostoTecnico->ejecutar($orden);
 
             $movimientosExistentes = $orden->movimientosFinancieros()->lockForUpdate()->get();
-            $movimientosIncompatibles = $movimientosExistentes->filter(fn (MovimientoFinanciero $movimiento): bool => $movimiento->tipo !== 'ingreso'
-                || $movimiento->categoria !== RegistrarAnticipoCotizacion::CATEGORIA
-                || $orden->cotizacion_id === null
-                || (int) $movimiento->cotizacion_id !== (int) $orden->cotizacion_id
-            );
+            $lotesAnuladosIds = GeneracionFinancieraOrden::query()
+                ->where('orden_servicio_id', $orden->id)
+                ->whereHas('anulaciones', fn ($query) => $query->where('tipo', AjusteFinancieroOrden::TIPO_ANULACION_ENTREGA))
+                ->pluck('id');
+
+            $movimientosIncompatibles = $movimientosExistentes->filter(function (MovimientoFinanciero $movimiento) use ($orden, $lotesAnuladosIds): bool {
+                $esAnticipoCompatible = $movimiento->tipo === 'ingreso'
+                    && $movimiento->categoria === RegistrarAnticipoCotizacion::CATEGORIA
+                    && $orden->cotizacion_id !== null
+                    && (int) $movimiento->cotizacion_id === (int) $orden->cotizacion_id;
+
+                // Movimientos (originales o compensatorios) de una entrega ya
+                // anulada estructuralmente (FASE H.6) no bloquean una reentrega:
+                // la posición financiera que dejaron ya fue neutralizada.
+                $esDeLoteAnulado = $movimiento->generacion_financiera_orden_id !== null
+                    && $lotesAnuladosIds->contains($movimiento->generacion_financiera_orden_id);
+
+                return ! $esAnticipoCompatible && ! $esDeLoteAnulado;
+            });
 
             if ($movimientosIncompatibles->isNotEmpty()) {
                 throw ValidationException::withMessages([
@@ -48,7 +64,14 @@ class GenerarFinanzasOrdenServicio
 
             $orden->loadMissing(['cotizacion', 'partnerRecepcion', 'partnerTecnico', 'detalles', 'refacciones']);
             $totalCliente = (float) $orden->total_cliente;
-            $totalAnticipos = round((float) $movimientosExistentes->sum('monto'), 2);
+            // Suma sólo anticipos genuinos: tras una reentrega (FASE H.6), los
+            // movimientos existentes pueden incluir además el lote anulado y su
+            // compensación, que deben quedar fuera de este cálculo (se anulan
+            // entre sí, pero monto siempre es positivo sin importar tipo).
+            $totalAnticipos = round((float) $movimientosExistentes
+                ->filter(fn (MovimientoFinanciero $movimiento): bool => $movimiento->tipo === 'ingreso'
+                    && $movimiento->categoria === RegistrarAnticipoCotizacion::CATEGORIA)
+                ->sum('monto'), 2);
             $saldo = round($totalCliente - $totalAnticipos, 2);
 
             if ($orden->cotizacion
@@ -64,15 +87,23 @@ class GenerarFinanzasOrdenServicio
                 ]);
             }
 
+            $lote = GeneracionFinancieraOrden::create([
+                'orden_servicio_id' => $orden->id,
+                'tipo' => GeneracionFinancieraOrden::TIPO_ENTREGA,
+                'actor_user_id' => auth()->id(),
+                'modelo_financiero' => $orden->modelo_financiero,
+                'fecha' => today(),
+            ]);
+
             if ($orden->usaCostosPorLinea()) {
-                $this->generarCostosPorLinea($orden, $saldo);
+                $this->generarCostosPorLinea($orden, $saldo, $lote->id);
             } else {
-                $this->generarLegacy($orden, $saldo);
+                $this->generarLegacy($orden, $saldo, $lote->id);
             }
         });
     }
 
-    private function generarLegacy(OrdenServicio $orden, float $saldo): void
+    private function generarLegacy(OrdenServicio $orden, float $saldo, int $loteId): void
     {
         $totalCliente = (float) $orden->total_cliente;
         $comisionLogistica = (float) ($orden->partnerRecepcion?->comision_fija ?? 0);
@@ -81,7 +112,7 @@ class GenerarFinanzasOrdenServicio
         $totalCostoServicios = (float) $orden->detalles->sum('costo_total');
 
         if ($saldo > 0) {
-            $this->crearMovimiento($orden, 'ingreso', 'reparacion', $saldo, null, 'Saldo de orden '.$orden->folio);
+            $this->crearMovimiento($orden, 'ingreso', 'reparacion', $saldo, null, 'Saldo de orden '.$orden->folio, $loteId);
         }
 
         if ($orden->partner_recepcion_id && $comisionLogistica > 0) {
@@ -92,6 +123,7 @@ class GenerarFinanzasOrdenServicio
                 $comisionLogistica,
                 $orden->partner_recepcion_id,
                 'Comisión logística por orden '.$orden->folio,
+                $loteId,
             );
         }
 
@@ -103,6 +135,7 @@ class GenerarFinanzasOrdenServicio
                 $costoTecnico,
                 $orden->partner_tecnico_id,
                 'Pago técnico por orden '.$orden->folio,
+                $loteId,
             );
         }
 
@@ -117,6 +150,7 @@ class GenerarFinanzasOrdenServicio
                 (float) $refaccion->costo_total,
                 null,
                 'Compra de refacción '.$refaccion->descripcion.' para orden '.$orden->folio,
+                $loteId,
             );
         }
 
@@ -132,6 +166,7 @@ class GenerarFinanzasOrdenServicio
                 (float) $detalle->costo_total,
                 null,
                 'Costo interno de servicio '.$detalle->descripcion.' para orden '.$orden->folio,
+                $loteId,
             );
         }
 
@@ -167,14 +202,14 @@ class GenerarFinanzasOrdenServicio
      * de recepción restan a la utilidad. costo_tecnico y comision_logistica se
      * ignoran por completo — no generan pago_socio_tecnico ni pago_socio_logistico.
      */
-    private function generarCostosPorLinea(OrdenServicio $orden, float $saldo): void
+    private function generarCostosPorLinea(OrdenServicio $orden, float $saldo, int $loteId): void
     {
         // La lectura completa de líneas/comisión ya ocurrió en generar()
         // (ValidarCostoTecnicoParaEntrega recalcula sobre datos actuales, no
         // sobre el booleano costos_incompletos persistido), así que a este
         // punto no existe ninguna línea o comisión NULL sin detectar.
         if ($saldo > 0) {
-            $this->crearMovimiento($orden, 'ingreso', 'reparacion', $saldo, null, 'Saldo de orden '.$orden->folio);
+            $this->crearMovimiento($orden, 'ingreso', 'reparacion', $saldo, null, 'Saldo de orden '.$orden->folio, $loteId);
         }
 
         $totalCostoServicios = 0.0;
@@ -193,6 +228,7 @@ class GenerarFinanzasOrdenServicio
                 $costoTotal,
                 null,
                 'Costo interno de servicio '.$detalle->descripcion.' para orden '.$orden->folio,
+                $loteId,
             );
         }
 
@@ -212,6 +248,7 @@ class GenerarFinanzasOrdenServicio
                 $costoTotal,
                 null,
                 'Compra de refacción '.$refaccion->descripcion.' para orden '.$orden->folio,
+                $loteId,
             );
         }
 
@@ -229,6 +266,7 @@ class GenerarFinanzasOrdenServicio
                 $comisionRecepcion,
                 $orden->partner_recepcion_id,
                 $descripcion,
+                $loteId,
             );
         }
 
@@ -265,10 +303,12 @@ class GenerarFinanzasOrdenServicio
         float $monto,
         ?int $partnerId,
         string $descripcion,
+        int $loteId,
     ): void {
         MovimientoFinanciero::create([
             'orden_servicio_id' => $orden->id,
             'cotizacion_id' => $orden->cotizacion_id,
+            'generacion_financiera_orden_id' => $loteId,
             'cliente_id' => $orden->cliente_id,
             'partner_id' => $partnerId,
             'tipo' => $tipo,
